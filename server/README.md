@@ -40,6 +40,7 @@ Client to server:
 - `click_pulse`
 - `page_update`
 - `pointer_state`
+- `pointer_target`
 - `leave`
 - `ping`
 
@@ -51,10 +52,11 @@ Server to client:
 - `click_pulse`
 - `page_mismatch`
 - `pointer_state`
+- `pointer_target`
 - `error`
 - `pong`
 
-The server supports one instructor and multiple students per room. Cursor movement and click pulses are relayed only from the room instructor to student clients.
+The server supports one instructor and multiple students per room. Cursor movement and click pulses are relayed only from the room instructor to either all students or the selected student target.
 
 ## Notes
 

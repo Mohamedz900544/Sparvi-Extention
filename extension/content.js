@@ -12,14 +12,20 @@
   const URL_POLL_INTERVAL_MS = 1000;
   const STAGE_STORAGE_KEY = "sparviInstructorStageLayout";
   const STAGE_MARGIN = 12;
+  const STAGE_TOP_MARGIN = 64;
   const MIN_STAGE_WIDTH = 260;
   const MIN_STAGE_HEIGHT = 170;
   const DRAG_THRESHOLD_PX = 3;
 
   const runtimeState = {
+    clientId: null,
     role: "student",
     connected: false,
-    pointerEnabled: false
+    pointerEnabled: false,
+    pointerTargetClientId: "all",
+    peer: {
+      students: []
+    }
   };
 
   const remotePointer = {
@@ -87,9 +93,14 @@
         return false;
 
       case "REMOTE_POINTER_STATE":
+        applyPointerTargetUpdate(message.payload || {});
         if (!message.payload || !message.payload.enabled) {
           hidePointer();
         }
+        return false;
+
+      case "POINTER_TARGET_UPDATE":
+        applyPointerTargetUpdate(message.payload || {});
         return false;
 
       case "PAGE_MISMATCH":
@@ -97,6 +108,8 @@
         return false;
 
       case "PEER_STATUS":
+        runtimeState.peer = normalizePeer(message.peer);
+        renderStudentTargets();
         updateMismatchBadge({
           instructorUrl: message.peer && message.peer.instructorUrl
         });
@@ -116,6 +129,7 @@
       root.setAttribute("aria-hidden", "true");
       root.innerHTML = [
         '<div class="sparvi-instructor-stage" data-visible="false" data-active="false">',
+        '  <div class="sparvi-target-bar" data-visible="false"></div>',
         '  <div class="sparvi-stage-title">Live Pointer Area</div>',
         '  <div class="sparvi-stage-corner sparvi-stage-corner-tl" data-resize="nw"></div>',
         '  <div class="sparvi-stage-corner sparvi-stage-corner-tr" data-resize="ne"></div>',
@@ -139,6 +153,7 @@
 
     elements.root = root;
     elements.stage = root.querySelector(".sparvi-instructor-stage");
+    elements.targetBar = root.querySelector(".sparvi-target-bar");
     elements.pointer = root.querySelector(".sparvi-pointer");
     elements.badge = root.querySelector(".sparvi-page-badge");
   }
@@ -155,6 +170,7 @@
 
     stageListenersInstalled = true;
     elements.stage.addEventListener("pointerdown", handleStagePointerDown, { capture: true });
+    elements.targetBar.addEventListener("click", handleTargetSelectionClick, { capture: true });
     document.addEventListener("pointermove", handleStagePointerMove, { capture: true });
     document.addEventListener("pointerup", handleStagePointerUp, { capture: true });
     document.addEventListener("pointercancel", handleStagePointerUp, { capture: true });
@@ -242,6 +258,11 @@
       return;
     }
 
+    if (!isThisStudentTargeted(payload.targetClientId)) {
+      hidePointer();
+      return;
+    }
+
     const xRatio = clampRatio(payload.xRatio);
     const yRatio = clampRatio(payload.yRatio);
     if (xRatio === null || yRatio === null) {
@@ -300,6 +321,10 @@
 
   function handleStagePointerDown(event) {
     if (!canSendPointer() || event.button !== 0) {
+      return;
+    }
+
+    if (event.target && event.target.closest && event.target.closest(".sparvi-target-button")) {
       return;
     }
 
@@ -466,8 +491,97 @@
     }
   }
 
+  function handleTargetSelectionClick(event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest(".sparvi-target-button")
+      : null;
+
+    if (!button || !canSendPointer()) {
+      return;
+    }
+
+    const targetClientId = normalizePointerTarget(button.dataset.targetClientId);
+    runtimeState.pointerTargetClientId = targetClientId;
+    renderStudentTargets();
+
+    sendToWorker({
+      type: "SET_POINTER_TARGET",
+      targetClientId
+    });
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function applyPointerTargetUpdate(payload) {
+    runtimeState.pointerTargetClientId = normalizePointerTarget(payload.targetClientId);
+    renderStudentTargets();
+
+    if (runtimeState.role === "student" && !isThisStudentTargeted(runtimeState.pointerTargetClientId)) {
+      hidePointer();
+    }
+  }
+
+  function renderStudentTargets() {
+    ensureOverlay();
+
+    if (!elements.targetBar) {
+      return;
+    }
+
+    const visible = canSendPointer();
+    elements.targetBar.dataset.visible = visible ? "true" : "false";
+    elements.targetBar.replaceChildren();
+
+    if (!visible) {
+      return;
+    }
+
+    elements.targetBar.appendChild(createTargetButton({
+      clientId: "all",
+      displayName: "All students",
+      label: "All",
+      avatarIndex: 8
+    }));
+
+    const students = runtimeState.peer.students || [];
+    students.forEach((student, index) => {
+      elements.targetBar.appendChild(createTargetButton({
+        clientId: student.clientId,
+        displayName: student.displayName || `Student ${index + 1}`,
+        label: String(index + 1),
+        avatarIndex: student.avatarIndex
+      }));
+    });
+  }
+
+  function createTargetButton(target) {
+    const button = document.createElement("button");
+    const selected = runtimeState.pointerTargetClientId === target.clientId;
+
+    button.type = "button";
+    button.className = "sparvi-target-button";
+    button.dataset.targetClientId = target.clientId;
+    button.dataset.avatar = String(Number(target.avatarIndex || 0) % 9);
+    button.dataset.selected = selected ? "true" : "false";
+    button.title = target.clientId === "all"
+      ? "Show pointer to all students"
+      : `Show pointer to ${target.displayName}`;
+
+    const avatar = document.createElement("span");
+    avatar.className = "sparvi-target-avatar";
+    avatar.textContent = target.label;
+
+    button.appendChild(avatar);
+    return button;
+  }
+
   function renderClickPulse(payload) {
     if (runtimeState.role !== "student") {
+      return;
+    }
+
+    if (!isThisStudentTargeted(payload.targetClientId)) {
       return;
     }
 
@@ -499,10 +613,14 @@
   }
 
   function applyRuntimeState(nextState) {
+    runtimeState.clientId = nextState.clientId || runtimeState.clientId;
     runtimeState.role = nextState.role || runtimeState.role;
     runtimeState.connected = Boolean(nextState.connected);
     runtimeState.pointerEnabled = Boolean(nextState.pointerEnabled);
+    runtimeState.pointerTargetClientId = normalizePointerTarget(nextState.pointerTargetClientId);
+    runtimeState.peer = normalizePeer(nextState.peer || runtimeState.peer);
     updateInstructorStageVisibility();
+    renderStudentTargets();
 
     if (!canSendPointer()) {
       pendingMove = null;
@@ -577,6 +695,42 @@
     return runtimeState.role === "instructor" && runtimeState.connected && runtimeState.pointerEnabled;
   }
 
+  function isThisStudentTargeted(targetClientId) {
+    const normalizedTarget = normalizePointerTarget(targetClientId);
+    return normalizedTarget === "all" || normalizedTarget === runtimeState.clientId;
+  }
+
+  function normalizePointerTarget(value) {
+    if (value === "all") {
+      return "all";
+    }
+
+    if (typeof value !== "string") {
+      return "all";
+    }
+
+    const trimmed = value.trim();
+    return trimmed ? trimmed.slice(0, 128) : "all";
+  }
+
+  function normalizePeer(peer) {
+    const students = Array.isArray(peer && peer.students)
+      ? peer.students
+      : [];
+
+    return {
+      ...(peer || {}),
+      students: students
+        .filter((student) => student && typeof student.clientId === "string")
+        .map((student, index) => ({
+          clientId: student.clientId,
+          displayName: String(student.displayName || `Student ${index + 1}`).slice(0, 40),
+          avatarIndex: Number.isFinite(Number(student.avatarIndex)) ? Number(student.avatarIndex) : index,
+          currentUrl: typeof student.currentUrl === "string" ? student.currentUrl : ""
+        }))
+    };
+  }
+
   function initializeStageLayout() {
     if (stageState.initialized) {
       return;
@@ -639,11 +793,11 @@
     const width = clampRange(finiteOr(layout.width, limits.maxWidth), limits.minWidth, limits.maxWidth);
     const height = clampRange(finiteOr(layout.height, limits.maxHeight), limits.minHeight, limits.maxHeight);
     const maxLeft = Math.max(STAGE_MARGIN, window.innerWidth - width - STAGE_MARGIN);
-    const maxTop = Math.max(STAGE_MARGIN, window.innerHeight - height - STAGE_MARGIN);
+    const maxTop = Math.max(STAGE_TOP_MARGIN, window.innerHeight - height - STAGE_MARGIN);
 
     return {
       left: clampRange(finiteOr(layout.left, STAGE_MARGIN), STAGE_MARGIN, maxLeft),
-      top: clampRange(finiteOr(layout.top, STAGE_MARGIN), STAGE_MARGIN, maxTop),
+      top: clampRange(finiteOr(layout.top, STAGE_TOP_MARGIN), STAGE_TOP_MARGIN, maxTop),
       width,
       height
     };
@@ -651,7 +805,7 @@
 
   function getStageLimits() {
     const maxWidth = Math.max(160, window.innerWidth - STAGE_MARGIN * 2);
-    const maxHeight = Math.max(120, window.innerHeight - STAGE_MARGIN * 2);
+    const maxHeight = Math.max(120, window.innerHeight - STAGE_TOP_MARGIN - STAGE_MARGIN);
 
     return {
       minWidth: Math.min(MIN_STAGE_WIDTH, maxWidth),

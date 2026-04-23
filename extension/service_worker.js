@@ -20,6 +20,7 @@ const state = {
   connectionStatus: "disconnected",
   connected: false,
   pointerEnabled: false,
+  pointerTargetClientId: "all",
   clientId: null,
   lastError: "",
   reconnectAttempt: 0,
@@ -35,6 +36,8 @@ const state = {
     instructorConnected: false,
     instructorUrl: "",
     pointerEnabled: false,
+    pointerTargetClientId: "all",
+    students: [],
     studentCount: 0,
     mismatch: false
   }
@@ -95,6 +98,9 @@ async function handleRuntimeMessage(message, sender) {
     case "STOP_POINTER":
       return setPointerEnabled(false);
 
+    case "SET_POINTER_TARGET":
+      return setPointerTarget(message);
+
     case "CURSOR_MOVE":
       return handleCursorMove(message, sender);
 
@@ -128,6 +134,9 @@ async function connect(message) {
   state.role = role;
   state.serverUrl = serverUrl;
   state.lastError = "";
+  if (role !== "instructor") {
+    state.pointerTargetClientId = "all";
+  }
 
   await storageSet({ sessionId, role, serverUrl });
   await getActiveTabStatus();
@@ -171,8 +180,29 @@ async function setPointerEnabled(enabled) {
   sendToServer({
     type: "pointer_state",
     enabled: state.pointerEnabled,
-    currentUrl: state.activeTab.url
+    currentUrl: state.activeTab.url,
+    targetClientId: state.pointerTargetClientId
   });
+  notifyAllState();
+  return { ok: true, state: getPublicState() };
+}
+
+async function setPointerTarget(message) {
+  if (state.role !== "instructor") {
+    setLastError("Only the instructor can choose pointer recipients.");
+    return { ok: false, error: state.lastError, state: getPublicState() };
+  }
+
+  const targetClientId = normalizePointerTarget(message.targetClientId);
+  if (!isPointerTargetAvailable(targetClientId)) {
+    setLastError("That student is no longer connected.");
+    state.pointerTargetClientId = "all";
+  } else {
+    state.pointerTargetClientId = targetClientId;
+    state.lastError = "";
+  }
+
+  sendPointerTargetToServer();
   notifyAllState();
   return { ok: true, state: getPublicState() };
 }
@@ -194,6 +224,7 @@ async function handleCursorMove(message, sender) {
     xRatio,
     yRatio,
     currentUrl,
+    targetClientId: state.pointerTargetClientId,
     viewport: message.viewport || null,
     timestamp: Date.now()
   });
@@ -222,6 +253,7 @@ async function handleClickPulse(message, sender) {
     xRatio,
     yRatio,
     currentUrl,
+    targetClientId: state.pointerTargetClientId,
     timestamp: Date.now()
   });
 
@@ -344,9 +376,12 @@ function disconnect() {
     instructorConnected: false,
     instructorUrl: "",
     pointerEnabled: false,
+    pointerTargetClientId: "all",
+    students: [],
     studentCount: 0,
     mismatch: false
   };
+  state.pointerTargetClientId = "all";
   notifyAllState();
 }
 
@@ -392,7 +427,8 @@ function sendJoinMessage() {
     roomId: state.sessionId,
     role: state.role,
     currentUrl: state.activeTab.url || "",
-    pointerEnabled: state.role === "instructor" && state.pointerEnabled
+    pointerEnabled: state.role === "instructor" && state.pointerEnabled,
+    targetClientId: state.pointerTargetClientId
   });
 }
 
@@ -416,8 +452,14 @@ function handleServerMessage(rawData) {
       state.peer.instructorConnected = Boolean(message.instructorConnected);
       state.peer.instructorUrl = message.instructorUrl || "";
       state.peer.pointerEnabled = Boolean(message.pointerEnabled);
+      state.peer.pointerTargetClientId = normalizePointerTarget(message.pointerTargetClientId);
+      state.peer.students = normalizeStudents(message.students);
       state.peer.studentCount = Number(message.studentCount || 0);
-      notifyPopup();
+      if (state.role === "instructor") {
+        state.pointerTargetClientId = state.peer.pointerTargetClientId;
+      }
+      reconcilePointerTargetWithStudents();
+      notifyAllState();
       broadcastToContentScripts({ type: "PEER_STATUS", peer: state.peer });
       break;
 
@@ -438,8 +480,16 @@ function handleServerMessage(rawData) {
 
     case "pointer_state":
       state.peer.pointerEnabled = Boolean(message.enabled);
-      notifyPopup();
+      state.peer.pointerTargetClientId = normalizePointerTarget(message.targetClientId || state.peer.pointerTargetClientId);
+      notifyAllState();
       broadcastToContentScripts({ type: "REMOTE_POINTER_STATE", payload: message });
+      break;
+
+    case "pointer_target":
+      state.pointerTargetClientId = normalizePointerTarget(message.targetClientId);
+      state.peer.pointerTargetClientId = state.pointerTargetClientId;
+      notifyAllState();
+      broadcastToContentScripts({ type: "POINTER_TARGET_UPDATE", payload: message });
       break;
 
     case "error":
@@ -539,6 +589,13 @@ function sendToServer(message) {
   }
 }
 
+function sendPointerTargetToServer() {
+  sendToServer({
+    type: "pointer_target",
+    targetClientId: state.pointerTargetClientId
+  });
+}
+
 function startKeepAlive() {
   stopKeepAlive();
   keepAliveTimer = setInterval(() => {
@@ -617,6 +674,59 @@ function normalizeSessionId(value) {
 
 function normalizeRole(value) {
   return value === "instructor" || value === "student" ? value : null;
+}
+
+function normalizePointerTarget(value) {
+  if (value === "all") {
+    return "all";
+  }
+
+  if (typeof value !== "string") {
+    return "all";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "all";
+  }
+
+  return trimmed.slice(0, 128);
+}
+
+function normalizeStudents(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((student) => student && typeof student.clientId === "string")
+    .map((student) => ({
+      clientId: student.clientId,
+      displayName: String(student.displayName || "Student").slice(0, 40),
+      avatarIndex: Number.isFinite(Number(student.avatarIndex)) ? Number(student.avatarIndex) : 0,
+      currentUrl: typeof student.currentUrl === "string" ? student.currentUrl : ""
+    }));
+}
+
+function isPointerTargetAvailable(targetClientId) {
+  if (targetClientId === "all") {
+    return true;
+  }
+
+  return state.peer.students.some((student) => student.clientId === targetClientId);
+}
+
+function reconcilePointerTargetWithStudents() {
+  if (state.role !== "instructor") {
+    return;
+  }
+
+  if (isPointerTargetAvailable(state.pointerTargetClientId)) {
+    return;
+  }
+
+  state.pointerTargetClientId = "all";
+  sendPointerTargetToServer();
 }
 
 function normalizeServerUrl(value) {

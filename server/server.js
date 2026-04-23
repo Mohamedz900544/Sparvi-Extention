@@ -24,6 +24,7 @@ wss.on("connection", (ws, request) => {
     roomId: null,
     currentUrl: "",
     pointerEnabled: false,
+    pointerTargetClientId: "all",
     joinedAt: null,
     remoteAddress: request.socket.remoteAddress
   };
@@ -102,6 +103,10 @@ function handleRawMessage(client, raw) {
       handlePointerState(client, message);
       break;
 
+    case "pointer_target":
+      handlePointerTarget(client, message);
+      break;
+
     case "leave":
       removeClientFromRoom(client);
       safeSend(client, { type: "peer_status", roomId: null, instructorConnected: false, studentCount: 0 });
@@ -143,6 +148,9 @@ function handleJoin(client, message) {
   client.role = role;
   client.currentUrl = normalizeUrl(message.currentUrl);
   client.pointerEnabled = role === "instructor" && Boolean(message.pointerEnabled);
+  client.pointerTargetClientId = role === "instructor"
+    ? resolvePointerTarget(roomId, normalizePointerTarget(message.targetClientId))
+    : "all";
   client.joinedAt = Date.now();
   room.set(client.clientId, client);
 
@@ -177,10 +185,15 @@ function handleCursorMove(client, message) {
 
   const previousUrl = client.currentUrl;
   client.currentUrl = normalizeUrl(message.currentUrl || client.currentUrl);
+  client.pointerTargetClientId = resolvePointerTarget(
+    client.roomId,
+    normalizePointerTarget(message.targetClientId || client.pointerTargetClientId)
+  );
 
-  broadcastToStudents(client.roomId, {
+  broadcastToTargetStudents(client.roomId, client.pointerTargetClientId, {
     type: "cursor_move",
     instructorId: client.clientId,
+    targetClientId: client.pointerTargetClientId,
     xRatio,
     yRatio,
     currentUrl: client.currentUrl,
@@ -207,10 +220,15 @@ function handleClickPulse(client, message) {
   }
 
   client.currentUrl = normalizeUrl(message.currentUrl || client.currentUrl);
+  client.pointerTargetClientId = resolvePointerTarget(
+    client.roomId,
+    normalizePointerTarget(message.targetClientId || client.pointerTargetClientId)
+  );
 
-  broadcastToStudents(client.roomId, {
+  broadcastToTargetStudents(client.roomId, client.pointerTargetClientId, {
     type: "click_pulse",
     instructorId: client.clientId,
+    targetClientId: client.pointerTargetClientId,
     xRatio,
     yRatio,
     currentUrl: client.currentUrl,
@@ -237,11 +255,16 @@ function handlePointerState(client, message) {
 
   client.pointerEnabled = Boolean(message.enabled);
   client.currentUrl = normalizeUrl(message.currentUrl || client.currentUrl);
+  client.pointerTargetClientId = resolvePointerTarget(
+    client.roomId,
+    normalizePointerTarget(message.targetClientId || client.pointerTargetClientId)
+  );
 
   broadcastToRoom(client.roomId, {
     type: "pointer_state",
     instructorId: client.clientId,
     enabled: client.pointerEnabled,
+    targetClientId: client.pointerTargetClientId,
     currentUrl: client.currentUrl,
     timestamp: Date.now()
   });
@@ -250,12 +273,35 @@ function handlePointerState(client, message) {
   sendPageMismatchForRoom(client.roomId);
 }
 
+function handlePointerTarget(client, message) {
+  if (!isJoinedInstructor(client)) {
+    sendError(client, "Only the instructor can choose pointer recipients.", "not_instructor");
+    return;
+  }
+
+  client.pointerTargetClientId = resolvePointerTarget(
+    client.roomId,
+    normalizePointerTarget(message.targetClientId)
+  );
+
+  broadcastToRoom(client.roomId, {
+    type: "pointer_target",
+    instructorId: client.clientId,
+    targetClientId: client.pointerTargetClientId,
+    timestamp: Date.now()
+  });
+
+  broadcastPeerStatus(client.roomId);
+}
+
 function removeClientFromRoom(client) {
   if (!client.roomId) {
     return;
   }
 
   const oldRoomId = client.roomId;
+  const oldClientId = client.clientId;
+  const oldRole = client.role;
   const room = rooms.get(oldRoomId);
   if (room) {
     room.delete(client.clientId);
@@ -264,10 +310,22 @@ function removeClientFromRoom(client) {
     }
   }
 
+  const instructor = findInstructor(oldRoomId);
+  if (oldRole === "student" && instructor && instructor.pointerTargetClientId === oldClientId) {
+    instructor.pointerTargetClientId = "all";
+    broadcastToRoom(oldRoomId, {
+      type: "pointer_target",
+      instructorId: instructor.clientId,
+      targetClientId: "all",
+      timestamp: Date.now()
+    });
+  }
+
   client.roomId = null;
   client.role = null;
   client.currentUrl = "";
   client.pointerEnabled = false;
+  client.pointerTargetClientId = "all";
   client.joinedAt = null;
 
   broadcastPeerStatus(oldRoomId);
@@ -290,6 +348,8 @@ function broadcastPeerStatus(roomId) {
     instructorConnected: Boolean(instructor),
     instructorUrl: instructor ? instructor.currentUrl : "",
     pointerEnabled: instructor ? instructor.pointerEnabled : false,
+    pointerTargetClientId: instructor ? instructor.pointerTargetClientId : "all",
+    students: buildStudentList(students),
     studentCount: students.length,
     clientCount: clients.length
   });
@@ -349,6 +409,27 @@ function broadcastToStudents(roomId, message) {
   }
 }
 
+function broadcastToTargetStudents(roomId, targetClientId, message) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    return;
+  }
+
+  const resolvedTarget = resolvePointerTarget(roomId, targetClientId);
+  for (const client of room.values()) {
+    if (client.role !== "student") {
+      continue;
+    }
+
+    if (resolvedTarget === "all" || client.clientId === resolvedTarget) {
+      safeSend(client, {
+        ...message,
+        targetClientId: resolvedTarget
+      });
+    }
+  }
+}
+
 function getOrCreateRoom(roomId) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, new Map());
@@ -373,6 +454,33 @@ function findInstructor(roomId) {
 
 function isJoinedInstructor(client) {
   return Boolean(client.roomId && client.role === "instructor");
+}
+
+function buildStudentList(students) {
+  return students
+    .slice()
+    .sort((a, b) => a.joinedAt - b.joinedAt)
+    .map((student, index) => ({
+      clientId: student.clientId,
+      displayName: `Student ${index + 1}`,
+      avatarIndex: index % 8,
+      currentUrl: student.currentUrl
+    }));
+}
+
+function resolvePointerTarget(roomId, targetClientId) {
+  const normalized = normalizePointerTarget(targetClientId);
+  if (normalized === "all") {
+    return "all";
+  }
+
+  const room = rooms.get(roomId);
+  if (!room) {
+    return "all";
+  }
+
+  const target = room.get(normalized);
+  return target && target.role === "student" ? normalized : "all";
 }
 
 function safeSend(client, message) {
@@ -416,6 +524,19 @@ function normalizeRoomId(value) {
 
 function normalizeRole(value) {
   return value === "instructor" || value === "student" ? value : null;
+}
+
+function normalizePointerTarget(value) {
+  if (value === "all") {
+    return "all";
+  }
+
+  if (typeof value !== "string") {
+    return "all";
+  }
+
+  const targetClientId = value.trim().slice(0, 128);
+  return targetClientId || "all";
 }
 
 function normalizeRatio(value) {
