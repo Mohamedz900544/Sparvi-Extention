@@ -95,6 +95,10 @@ function handleRawMessage(client, raw) {
       handleClickPulse(client, message);
       break;
 
+    case "tool_event":
+      handleToolEvent(client, message);
+      break;
+
     case "page_update":
       handlePageUpdate(client, message);
       break;
@@ -158,7 +162,10 @@ function handleJoin(client, message) {
     type: "joined",
     clientId: client.clientId,
     roomId,
-    role
+    role,
+    features: {
+      toolEvent: true
+    }
   });
 
   console.log(`[server] ${client.clientId} joined room ${roomId} as ${role}`);
@@ -233,6 +240,40 @@ function handleClickPulse(client, message) {
     yRatio,
     currentUrl: client.currentUrl,
     timestamp: Date.now()
+  });
+}
+
+function handleToolEvent(client, message) {
+  if (!isJoinedInstructor(client)) {
+    sendError(client, "Only the joined instructor can send teaching tool events.", "not_instructor");
+    return;
+  }
+
+  if (!client.pointerEnabled) {
+    return;
+  }
+
+  const event = normalizeToolEvent(message.event);
+  if (!event) {
+    sendError(client, "Invalid teaching tool event.", "invalid_tool_event");
+    return;
+  }
+
+  client.currentUrl = normalizeUrl(event.currentUrl || client.currentUrl);
+  client.pointerTargetClientId = resolvePointerTarget(
+    client.roomId,
+    normalizePointerTarget(event.targetClientId || client.pointerTargetClientId)
+  );
+
+  broadcastToTargetStudents(client.roomId, client.pointerTargetClientId, {
+    type: "tool_event",
+    event: {
+      ...event,
+      instructorId: client.clientId,
+      targetClientId: client.pointerTargetClientId,
+      currentUrl: client.currentUrl,
+      timestamp: Date.now()
+    }
   });
 }
 
@@ -554,6 +595,54 @@ function normalizeUrl(value) {
   }
 
   return value.slice(0, MAX_URL_LENGTH);
+}
+
+function normalizeToolEvent(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const kind = typeof value.kind === "string" ? value.kind.slice(0, 40) : "";
+  const allowedKinds = new Set([
+    "laser_point",
+    "draw_arrow",
+    "draw_circle",
+    "draw_underline",
+    "highlight_element",
+    "freeze_marker",
+    "guided_hotspot",
+    "clear_tools"
+  ]);
+
+  if (!allowedKinds.has(kind)) {
+    return null;
+  }
+
+  const normalized = {
+    kind,
+    id: typeof value.id === "string" ? value.id.slice(0, 80) : createClientId(),
+    currentUrl: normalizeUrl(value.currentUrl),
+    targetClientId: normalizePointerTarget(value.targetClientId)
+  };
+
+  for (const key of ["xRatio", "yRatio", "x1Ratio", "y1Ratio", "x2Ratio", "y2Ratio"]) {
+    if (value[key] !== undefined) {
+      const ratio = normalizeRatio(value[key]);
+      if (ratio === null) {
+        return null;
+      }
+      normalized[key] = ratio;
+    }
+  }
+
+  if (value.stepNumber !== undefined) {
+    const stepNumber = Number(value.stepNumber);
+    normalized.stepNumber = Number.isFinite(stepNumber)
+      ? Math.max(1, Math.min(99, Math.round(stepNumber)))
+      : 1;
+  }
+
+  return normalized;
 }
 
 function shutdown(signal) {

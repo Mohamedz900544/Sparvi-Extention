@@ -79,8 +79,9 @@ If you change the port, update `DEFAULT_SERVER_URL` in `extension/service_worker
 7. A solid floating Live Pointer rectangle appears on the instructor page.
 8. Student avatar circles appear above the rectangle.
 9. Choose `All` to show the pointer to every student, or choose one student avatar to show it only to that student.
-10. Drag the rectangle from its body, or resize it from the corners and edges.
-11. Move or click inside that rectangle. The selected student or students see the Teacher cursor and click pulse mapped by the same x/y ratios on their viewport.
+10. Use the tool buttons inside the rectangle for pointer, laser, arrow, circle, underline, element highlight, freeze marker, guided step marker, or clear.
+11. Drag the rectangle from its body in Pointer mode, or resize it from the corners and edges.
+12. Move, click, or draw inside that rectangle. The selected student or students see the Teacher cursor, click pulse, and teaching tools mapped by the same x/y ratios on their viewport.
 
 Students can join before the instructor. The room supports one instructor and multiple students.
 
@@ -115,8 +116,8 @@ The extension does not load remotely hosted code. The backend is a separate WebS
 
 - `service_worker.js`: owns extension state, WebSocket lifecycle, reconnects, session persistence, and routing between popup, content scripts, and backend.
 - `popup.js`: displays session controls, role controls, page support, connection state, and instructor controls.
-- `content.js`: injects a fixed overlay, shows the instructor's draggable and resizable pointer area, renders student target avatars, tracks instructor mouse movement and clicks inside that area, receives remote cursor events, and watches SPA URL changes.
-- `server/server.js`: manages rooms, one instructor, multiple students, heartbeat, malformed message handling, targeted pointer relay, and page mismatch messages.
+- `content.js`: injects a fixed overlay, shows the instructor's draggable and resizable pointer area, renders student target avatars and teaching tools, tracks instructor mouse movement, clicks, drawings, highlights, and hotspots inside that area, receives remote cursor/tool events, and watches SPA URL changes.
+- `server/server.js`: manages rooms, one instructor, multiple students, heartbeat, malformed message handling, targeted pointer/tool relay, and page mismatch messages.
 
 ## Troubleshooting
 

@@ -15,6 +15,15 @@
   pointer-events: none !important;
 }
 
+#sparvi-live-pointer-root .sparvi-teaching-layer {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
 #sparvi-live-pointer-root .sparvi-instructor-stage {
   position: fixed !important;
   left: 50% !important;
@@ -167,6 +176,52 @@
   background: #111827 !important;
 }
 
+#sparvi-live-pointer-root .sparvi-tool-bar {
+  position: absolute !important;
+  right: 10px !important;
+  top: 10px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  max-width: min(460px, calc(100% - 170px)) !important;
+  opacity: 0 !important;
+  pointer-events: auto !important;
+  transition: opacity 140ms ease !important;
+  visibility: hidden !important;
+}
+
+#sparvi-live-pointer-root .sparvi-tool-bar[data-visible="true"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#sparvi-live-pointer-root .sparvi-tool-button {
+  appearance: none !important;
+  min-width: 36px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  color: #172033 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.13) !important;
+  cursor: pointer !important;
+  font: 750 11px/1 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  outline: none !important;
+  pointer-events: auto !important;
+}
+
+#sparvi-live-pointer-root .sparvi-tool-button[data-selected="true"] {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+#sparvi-live-pointer-root .sparvi-tool-button:hover {
+  border-color: #2563eb !important;
+}
+
 #sparvi-live-pointer-root .sparvi-stage-corner,
 #sparvi-live-pointer-root .sparvi-stage-edge {
   position: absolute !important;
@@ -307,6 +362,104 @@
   animation: sparvi-click-pulse 700ms ease-out forwards !important;
 }
 
+#sparvi-live-pointer-root .sparvi-laser-dot {
+  position: fixed !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin-left: -7px !important;
+  margin-top: -7px !important;
+  border-radius: 999px !important;
+  background: #ef4444 !important;
+  box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.18), 0 0 18px rgba(239, 68, 68, 0.65) !important;
+  animation: sparvi-laser-fade 850ms ease-out forwards !important;
+}
+
+#sparvi-live-pointer-root .sparvi-drawing-svg {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: visible !important;
+}
+
+#sparvi-live-pointer-root .sparvi-svg-arrow,
+#sparvi-live-pointer-root .sparvi-svg-underline {
+  stroke: #f97316 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  stroke-width: 8 !important;
+  fill: none !important;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28)) !important;
+}
+
+#sparvi-live-pointer-root .sparvi-svg-underline {
+  stroke: #2563eb !important;
+  stroke-width: 10 !important;
+}
+
+#sparvi-live-pointer-root .sparvi-svg-arrow-head {
+  fill: #f97316 !important;
+}
+
+#sparvi-live-pointer-root .sparvi-drawn-circle {
+  position: fixed !important;
+  border: 4px solid #f97316 !important;
+  border-radius: 999px !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.22) !important;
+}
+
+#sparvi-live-pointer-root .sparvi-element-highlight {
+  position: fixed !important;
+  border: 3px solid #facc15 !important;
+  border-radius: 6px !important;
+  background: rgba(250, 204, 21, 0.16) !important;
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.18), 0 8px 24px rgba(15, 23, 42, 0.22) !important;
+  animation: sparvi-highlight-pop 3500ms ease-out forwards !important;
+}
+
+#sparvi-live-pointer-root .sparvi-freeze-marker {
+  position: fixed !important;
+  min-width: 78px !important;
+  padding: 8px 10px !important;
+  border-radius: 999px !important;
+  color: #ffffff !important;
+  background: #111827 !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.28) !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  transform: translate(-50%, -50%) !important;
+  white-space: nowrap !important;
+}
+
+#sparvi-live-pointer-root .sparvi-freeze-marker::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: -7px !important;
+  width: 12px !important;
+  height: 12px !important;
+  background: #111827 !important;
+  transform: translateX(-50%) rotate(45deg) !important;
+}
+
+#sparvi-live-pointer-root .sparvi-guided-hotspot {
+  position: fixed !important;
+  display: grid !important;
+  width: 36px !important;
+  height: 36px !important;
+  place-items: center !important;
+  border: 3px solid #ffffff !important;
+  border-radius: 999px !important;
+  color: #ffffff !important;
+  background: #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.22), 0 8px 24px rgba(15, 23, 42, 0.26) !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  transform: translate(-50%, -50%) !important;
+}
+
 .sparvi-page-badge,
 .sparvi-unsupported-badge {
   position: fixed !important;
@@ -352,5 +505,33 @@
   to {
     opacity: 0;
     transform: scale(3.4);
+  }
+}
+
+@keyframes sparvi-laser-fade {
+  from {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+}
+
+@keyframes sparvi-highlight-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }

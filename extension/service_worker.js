@@ -21,6 +21,9 @@ const state = {
   connected: false,
   pointerEnabled: false,
   pointerTargetClientId: "all",
+  serverFeatures: {
+    toolEvent: false
+  },
   clientId: null,
   lastError: "",
   reconnectAttempt: 0,
@@ -106,6 +109,9 @@ async function handleRuntimeMessage(message, sender) {
 
     case "CLICK_PULSE":
       return handleClickPulse(message, sender);
+
+    case "TEACHING_TOOL_EVENT":
+      return handleTeachingToolEvent(message, sender);
 
     case "PAGE_UPDATE":
       return handlePageUpdate(message, sender);
@@ -230,6 +236,38 @@ async function handleCursorMove(message, sender) {
   });
 
   return { ok: true };
+}
+
+async function handleTeachingToolEvent(message, sender) {
+  if (state.role !== "instructor" || !state.connected || !state.pointerEnabled) {
+    return { ok: true, ignored: true };
+  }
+
+  if (!state.serverFeatures.toolEvent) {
+    setLastError("Teaching tools need the updated backend. Restart the Node server, then reload both extensions.");
+    return { ok: false, error: state.lastError, state: getPublicState() };
+  }
+
+  if (!message.event || typeof message.event !== "object") {
+    return { ok: false, error: "Teaching tool event is missing." };
+  }
+
+  const currentUrl = getMessageUrl(message.event, sender);
+  const sent = sendToServer({
+    type: "tool_event",
+    event: {
+      ...message.event,
+      currentUrl,
+      targetClientId: state.pointerTargetClientId,
+      timestamp: Date.now()
+    }
+  });
+
+  if (!sent) {
+    return { ok: false, error: "Could not send teaching tool event to the server.", state: getPublicState() };
+  }
+
+  return { ok: true, state: getPublicState() };
 }
 
 async function handleClickPulse(message, sender) {
@@ -370,6 +408,7 @@ function disconnect() {
   state.connectionStatus = "disconnected";
   state.connected = false;
   state.pointerEnabled = false;
+  state.serverFeatures.toolEvent = false;
   state.clientId = null;
   state.lastError = "";
   state.peer = {
@@ -444,6 +483,7 @@ function handleServerMessage(rawData) {
   switch (message.type) {
     case "joined":
       state.clientId = message.clientId || null;
+      state.serverFeatures.toolEvent = Boolean(message.features && message.features.toolEvent);
       state.lastError = "";
       notifyAllState();
       break;
@@ -469,6 +509,10 @@ function handleServerMessage(rawData) {
 
     case "click_pulse":
       broadcastToContentScripts({ type: "REMOTE_CLICK_PULSE", payload: message });
+      break;
+
+    case "tool_event":
+      broadcastToContentScripts({ type: "REMOTE_TOOL_EVENT", payload: message.event || message });
       break;
 
     case "page_mismatch":

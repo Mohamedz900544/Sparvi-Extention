@@ -16,6 +16,8 @@
   const MIN_STAGE_WIDTH = 260;
   const MIN_STAGE_HEIGHT = 170;
   const DRAG_THRESHOLD_PX = 3;
+  const TOOL_SEND_INTERVAL_MS = 45;
+  const DRAW_TOOL_MODES = new Set(["arrow", "circle", "underline"]);
 
   const runtimeState = {
     clientId: null,
@@ -46,6 +48,10 @@
   let stageListenersInstalled = false;
   let suppressNextStageClick = false;
   let suppressStageClickTimer = null;
+  let currentToolMode = "pointer";
+  let toolInteraction = null;
+  let lastToolSentAt = 0;
+  let hotspotStepNumber = 1;
 
   const stageState = {
     initialized: false,
@@ -92,6 +98,10 @@
         renderClickPulse(message.payload || {});
         return false;
 
+      case "REMOTE_TOOL_EVENT":
+        renderRemoteToolEvent(message.payload || {});
+        return false;
+
       case "REMOTE_POINTER_STATE":
         applyPointerTargetUpdate(message.payload || {});
         if (!message.payload || !message.payload.enabled) {
@@ -123,13 +133,30 @@
   function ensureOverlay() {
     let root = document.getElementById(ROOT_ID);
 
+    if (root && !root.querySelector(".sparvi-tool-bar")) {
+      root.remove();
+      root = null;
+    }
+
     if (!root) {
       root = document.createElement("div");
       root.id = ROOT_ID;
       root.setAttribute("aria-hidden", "true");
       root.innerHTML = [
+        '<div class="sparvi-teaching-layer"></div>',
         '<div class="sparvi-instructor-stage" data-visible="false" data-active="false">',
         '  <div class="sparvi-target-bar" data-visible="false"></div>',
+        '  <div class="sparvi-tool-bar" data-visible="false">',
+        '    <button class="sparvi-tool-button" type="button" data-tool="pointer" title="Pointer">Ptr</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="laser" title="Laser pointer">Laser</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="arrow" title="Draw arrow">Arrow</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="circle" title="Draw circle">Circle</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="underline" title="Draw underline">Line</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="highlight" title="Highlight element">HL</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="freeze" title="Freeze marker">Pin</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool="hotspot" title="Guided hotspot">Step</button>',
+        '    <button class="sparvi-tool-button" type="button" data-tool-action="clear" title="Clear teaching marks">Clear</button>',
+        '  </div>',
         '  <div class="sparvi-stage-title">Live Pointer Area</div>',
         '  <div class="sparvi-stage-corner sparvi-stage-corner-tl" data-resize="nw"></div>',
         '  <div class="sparvi-stage-corner sparvi-stage-corner-tr" data-resize="ne"></div>',
@@ -152,8 +179,10 @@
     }
 
     elements.root = root;
+    elements.teachingLayer = root.querySelector(".sparvi-teaching-layer");
     elements.stage = root.querySelector(".sparvi-instructor-stage");
     elements.targetBar = root.querySelector(".sparvi-target-bar");
+    elements.toolBar = root.querySelector(".sparvi-tool-bar");
     elements.pointer = root.querySelector(".sparvi-pointer");
     elements.badge = root.querySelector(".sparvi-page-badge");
   }
@@ -170,7 +199,8 @@
 
     stageListenersInstalled = true;
     elements.stage.addEventListener("pointerdown", handleStagePointerDown, { capture: true });
-    elements.targetBar.addEventListener("click", handleTargetSelectionClick, { capture: true });
+    elements.targetBar.addEventListener("pointerdown", handleTargetSelectionPointerDown, { capture: true });
+    elements.toolBar.addEventListener("pointerdown", handleToolBarPointerDown, { capture: true });
     document.addEventListener("pointermove", handleStagePointerMove, { capture: true });
     document.addEventListener("pointerup", handleStagePointerUp, { capture: true });
     document.addEventListener("pointercancel", handleStagePointerUp, { capture: true });
@@ -182,11 +212,19 @@
       return;
     }
 
+    if (isOverlayControlTarget(event.target)) {
+      return;
+    }
+
     const stagePoint = getInstructorStagePoint(event);
     updateInstructorStageActive(Boolean(stagePoint));
 
     if (!stagePoint) {
       return;
+    }
+
+    if (currentToolMode === "laser") {
+      sendLaserPoint(stagePoint);
     }
 
     pendingMove = {
@@ -233,6 +271,10 @@
       return;
     }
 
+    if (isOverlayControlTarget(event.target)) {
+      return;
+    }
+
     if (suppressNextStageClick) {
       clearStageClickSuppression();
       return;
@@ -245,12 +287,43 @@
       return;
     }
 
-    sendToWorker({
-      type: "CLICK_PULSE",
-      xRatio: stagePoint.xRatio,
-      yRatio: stagePoint.yRatio,
-      currentUrl: window.location.href
-    });
+    if (currentToolMode === "highlight") {
+      sendTeachingToolEvent({
+        kind: "highlight_element",
+        xRatio: stagePoint.xRatio,
+        yRatio: stagePoint.yRatio
+      });
+      return;
+    }
+
+    if (currentToolMode === "freeze") {
+      sendTeachingToolEvent({
+        kind: "freeze_marker",
+        xRatio: stagePoint.xRatio,
+        yRatio: stagePoint.yRatio
+      });
+      return;
+    }
+
+    if (currentToolMode === "hotspot") {
+      sendTeachingToolEvent({
+        kind: "guided_hotspot",
+        xRatio: stagePoint.xRatio,
+        yRatio: stagePoint.yRatio,
+        stepNumber: hotspotStepNumber
+      });
+      hotspotStepNumber += 1;
+      return;
+    }
+
+    if (currentToolMode === "pointer" || currentToolMode === "laser") {
+      sendToWorker({
+        type: "CLICK_PULSE",
+        xRatio: stagePoint.xRatio,
+        yRatio: stagePoint.yRatio,
+        currentUrl: window.location.href
+      });
+    }
   }
 
   function renderRemoteCursor(payload) {
@@ -324,13 +397,30 @@
       return;
     }
 
-    if (event.target && event.target.closest && event.target.closest(".sparvi-target-button")) {
+    if (isOverlayControlTarget(event.target)) {
       return;
     }
 
     ensureOverlay();
     const rect = elements.stage.getBoundingClientRect();
     const resizeMode = event.target && event.target.dataset ? event.target.dataset.resize || "" : "";
+    const isTitleDrag = event.target && event.target.closest
+      ? Boolean(event.target.closest(".sparvi-stage-title"))
+      : false;
+
+    if (!resizeMode && DRAW_TOOL_MODES.has(currentToolMode)) {
+      const stagePoint = getInstructorStagePoint(event);
+      if (stagePoint) {
+        startDrawToolInteraction(event, stagePoint);
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    if (!resizeMode && currentToolMode !== "pointer" && !isTitleDrag) {
+      return;
+    }
 
     stageInteraction = {
       mode: resizeMode ? "resize" : "drag",
@@ -355,6 +445,11 @@
   }
 
   function handleStagePointerMove(event) {
+    if (toolInteraction && event.pointerId === toolInteraction.pointerId) {
+      handleToolPointerMove(event);
+      return;
+    }
+
     if (!stageInteraction || event.pointerId !== stageInteraction.pointerId) {
       return;
     }
@@ -380,6 +475,11 @@
   }
 
   function handleStagePointerUp(event) {
+    if (toolInteraction && event.pointerId === toolInteraction.pointerId) {
+      finishToolInteraction(event);
+      return;
+    }
+
     if (!stageInteraction || event.pointerId !== stageInteraction.pointerId) {
       return;
     }
@@ -401,6 +501,74 @@
       event.preventDefault();
       event.stopPropagation();
     }
+  }
+
+  function startDrawToolInteraction(event, stagePoint) {
+    toolInteraction = {
+      pointerId: event.pointerId,
+      toolMode: currentToolMode,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPoint: stagePoint,
+      endPoint: stagePoint,
+      moved: false
+    };
+
+    try {
+      elements.stage.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Document-level listeners still handle the drag if capture is unavailable.
+    }
+  }
+
+  function handleToolPointerMove(event) {
+    const stagePoint = getInstructorStagePoint(event);
+    if (stagePoint) {
+      toolInteraction.endPoint = stagePoint;
+    }
+
+    const dx = event.clientX - toolInteraction.startX;
+    const dy = event.clientY - toolInteraction.startY;
+    if (Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX) {
+      toolInteraction.moved = true;
+      suppressStageClickBriefly();
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function finishToolInteraction(event) {
+    const interaction = toolInteraction;
+    toolInteraction = null;
+
+    try {
+      elements.stage.releasePointerCapture(interaction.pointerId);
+    } catch (error) {
+      // Capture may already be released by the browser.
+    }
+
+    if (!interaction.moved) {
+      return;
+    }
+
+    const kindByTool = {
+      arrow: "draw_arrow",
+      circle: "draw_circle",
+      underline: "draw_underline"
+    };
+
+    sendTeachingToolEvent({
+      kind: kindByTool[interaction.toolMode],
+      x1Ratio: interaction.startPoint.xRatio,
+      y1Ratio: interaction.startPoint.yRatio,
+      x2Ratio: interaction.endPoint.xRatio,
+      y2Ratio: interaction.endPoint.yRatio
+    });
+
+    suppressStageClickBriefly();
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   function suppressStageClickBriefly() {
@@ -491,12 +659,12 @@
     }
   }
 
-  function handleTargetSelectionClick(event) {
+  function handleTargetSelectionPointerDown(event) {
     const button = event.target && event.target.closest
       ? event.target.closest(".sparvi-target-button")
       : null;
 
-    if (!button || !canSendPointer()) {
+    if (!button || !canSendPointer() || event.button !== 0) {
       return;
     }
 
@@ -576,6 +744,286 @@
     return button;
   }
 
+  function handleToolBarPointerDown(event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest(".sparvi-tool-button")
+      : null;
+
+    if (!button || !canSendPointer() || event.button !== 0) {
+      return;
+    }
+
+    const action = button.dataset.toolAction || "";
+    if (action === "clear") {
+      hotspotStepNumber = 1;
+      sendTeachingToolEvent({ kind: "clear_tools" });
+      clearTeachingArtifacts();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    currentToolMode = button.dataset.tool || "pointer";
+    renderToolBar();
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function renderToolBar() {
+    ensureOverlay();
+
+    if (!elements.toolBar) {
+      return;
+    }
+
+    const visible = canSendPointer();
+    elements.toolBar.dataset.visible = visible ? "true" : "false";
+
+    for (const button of elements.toolBar.querySelectorAll(".sparvi-tool-button")) {
+      const tool = button.dataset.tool || "";
+      button.dataset.selected = tool && tool === currentToolMode ? "true" : "false";
+    }
+  }
+
+  function sendLaserPoint(stagePoint) {
+    const now = Date.now();
+    if (now - lastToolSentAt < TOOL_SEND_INTERVAL_MS) {
+      return;
+    }
+
+    lastToolSentAt = now;
+    sendTeachingToolEvent({
+      kind: "laser_point",
+      xRatio: stagePoint.xRatio,
+      yRatio: stagePoint.yRatio
+    });
+  }
+
+  function sendTeachingToolEvent(event) {
+    if (!event || !event.kind) {
+      return;
+    }
+
+    const eventForSend = {
+      id: createEventId(),
+      ...event,
+      currentUrl: window.location.href,
+      targetClientId: runtimeState.pointerTargetClientId
+    };
+
+    sendToWorker({
+      type: "TEACHING_TOOL_EVENT",
+      event: eventForSend
+    }, (response) => {
+      if (!response || !response.ok) {
+        console.warn("[Sparvi] Teaching tool event was not accepted:", response && response.error);
+        return;
+      }
+
+      renderLocalTeachingToolPreview(eventForSend);
+    });
+  }
+
+  function renderRemoteToolEvent(event) {
+    if (runtimeState.role !== "student") {
+      return;
+    }
+
+    if (!isThisStudentTargeted(event.targetClientId)) {
+      return;
+    }
+
+    ensureOverlay();
+    updateMismatchBadge({ instructorUrl: event.currentUrl });
+    renderTeachingToolEvent(event);
+  }
+
+  function renderLocalTeachingToolPreview(event) {
+    if (runtimeState.role !== "instructor") {
+      return;
+    }
+
+    renderTeachingToolEvent(event);
+  }
+
+  function renderTeachingToolEvent(event) {
+    switch (event.kind) {
+      case "laser_point":
+        renderLaserPoint(event);
+        break;
+
+      case "draw_arrow":
+      case "draw_circle":
+      case "draw_underline":
+        renderDrawingArtifact(event);
+        break;
+
+      case "highlight_element":
+        renderElementHighlight(event);
+        break;
+
+      case "freeze_marker":
+        renderFreezeMarker(event);
+        break;
+
+      case "guided_hotspot":
+        renderGuidedHotspot(event);
+        break;
+
+      case "clear_tools":
+        clearTeachingArtifacts();
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  function renderLaserPoint(event) {
+    const point = ratiosToViewport(event.xRatio, event.yRatio);
+    if (!point) {
+      return;
+    }
+
+    const dot = document.createElement("div");
+    dot.className = "sparvi-laser-dot";
+    dot.style.left = `${point.x}px`;
+    dot.style.top = `${point.y}px`;
+    elements.teachingLayer.appendChild(dot);
+
+    dot.addEventListener("animationend", () => dot.remove(), { once: true });
+    setTimeout(() => dot.remove(), 1000);
+  }
+
+  function renderDrawingArtifact(event) {
+    if (event.kind === "draw_circle") {
+      renderCircleArtifact(event);
+      return;
+    }
+
+    const svg = createDrawingSvg();
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const y1 = event.kind === "draw_underline" ? event.y2Ratio : event.y1Ratio;
+    const y2 = event.y2Ratio;
+    line.setAttribute("x1", String(event.x1Ratio * 1000));
+    line.setAttribute("y1", String(y1 * 1000));
+    line.setAttribute("x2", String(event.x2Ratio * 1000));
+    line.setAttribute("y2", String(y2 * 1000));
+    line.setAttribute("class", event.kind === "draw_arrow" ? "sparvi-svg-arrow" : "sparvi-svg-underline");
+
+    if (event.kind === "draw_arrow") {
+      const markerId = `sparvi-arrowhead-${event.id || Date.now()}`;
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+      const markerPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+      marker.setAttribute("id", markerId);
+      marker.setAttribute("markerWidth", "10");
+      marker.setAttribute("markerHeight", "10");
+      marker.setAttribute("refX", "8");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("orient", "auto");
+      markerPath.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+      markerPath.setAttribute("class", "sparvi-svg-arrow-head");
+      marker.appendChild(markerPath);
+      defs.appendChild(marker);
+      svg.appendChild(defs);
+      line.setAttribute("marker-end", `url(#${markerId})`);
+    }
+
+    svg.appendChild(line);
+    elements.teachingLayer.appendChild(svg);
+  }
+
+  function renderCircleArtifact(event) {
+    const left = Math.min(event.x1Ratio, event.x2Ratio);
+    const top = Math.min(event.y1Ratio, event.y2Ratio);
+    const width = Math.abs(event.x2Ratio - event.x1Ratio);
+    const height = Math.abs(event.y2Ratio - event.y1Ratio);
+
+    if (width < 0.01 || height < 0.01) {
+      return;
+    }
+
+    const circle = document.createElement("div");
+    circle.className = "sparvi-teaching-artifact sparvi-drawn-circle";
+    circle.style.left = `${left * 100}%`;
+    circle.style.top = `${top * 100}%`;
+    circle.style.width = `${width * 100}%`;
+    circle.style.height = `${height * 100}%`;
+    elements.teachingLayer.appendChild(circle);
+  }
+
+  function createDrawingSvg() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "sparvi-teaching-artifact sparvi-drawing-svg");
+    svg.setAttribute("viewBox", "0 0 1000 1000");
+    svg.setAttribute("preserveAspectRatio", "none");
+    return svg;
+  }
+
+  function renderElementHighlight(event) {
+    const point = ratiosToViewport(event.xRatio, event.yRatio);
+    if (!point) {
+      return;
+    }
+
+    const target = document.elementFromPoint(point.x, point.y);
+    if (!target || target === document.documentElement || target === document.body || elements.root.contains(target)) {
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    const highlight = document.createElement("div");
+    highlight.className = "sparvi-teaching-artifact sparvi-element-highlight";
+    highlight.style.left = `${rect.left}px`;
+    highlight.style.top = `${rect.top}px`;
+    highlight.style.width = `${rect.width}px`;
+    highlight.style.height = `${rect.height}px`;
+    elements.teachingLayer.appendChild(highlight);
+
+    setTimeout(() => highlight.remove(), 3500);
+  }
+
+  function renderFreezeMarker(event) {
+    const point = ratiosToViewport(event.xRatio, event.yRatio);
+    if (!point) {
+      return;
+    }
+
+    const marker = document.createElement("div");
+    marker.className = "sparvi-teaching-artifact sparvi-freeze-marker";
+    marker.style.left = `${point.x}px`;
+    marker.style.top = `${point.y}px`;
+    marker.textContent = "Look here";
+    elements.teachingLayer.appendChild(marker);
+  }
+
+  function renderGuidedHotspot(event) {
+    const point = ratiosToViewport(event.xRatio, event.yRatio);
+    if (!point) {
+      return;
+    }
+
+    const hotspot = document.createElement("div");
+    hotspot.className = "sparvi-teaching-artifact sparvi-guided-hotspot";
+    hotspot.style.left = `${point.x}px`;
+    hotspot.style.top = `${point.y}px`;
+    hotspot.textContent = String(event.stepNumber || 1);
+    elements.teachingLayer.appendChild(hotspot);
+  }
+
+  function clearTeachingArtifacts() {
+    ensureOverlay();
+    elements.teachingLayer
+      .querySelectorAll(".sparvi-teaching-artifact, .sparvi-laser-dot")
+      .forEach((node) => node.remove());
+  }
+
   function renderClickPulse(payload) {
     if (runtimeState.role !== "student") {
       return;
@@ -621,6 +1069,7 @@
     runtimeState.peer = normalizePeer(nextState.peer || runtimeState.peer);
     updateInstructorStageVisibility();
     renderStudentTargets();
+    renderToolBar();
 
     if (!canSendPointer()) {
       pendingMove = null;
@@ -729,6 +1178,35 @@
           currentUrl: typeof student.currentUrl === "string" ? student.currentUrl : ""
         }))
     };
+  }
+
+  function ratiosToViewport(xRatio, yRatio) {
+    const x = clampRatio(xRatio);
+    const y = clampRatio(yRatio);
+    if (x === null || y === null) {
+      return null;
+    }
+
+    return {
+      x: x * window.innerWidth,
+      y: y * window.innerHeight
+    };
+  }
+
+  function createEventId() {
+    if (globalThis.crypto && globalThis.crypto.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function isOverlayControlTarget(target) {
+    if (!target || !target.closest) {
+      return false;
+    }
+
+    return Boolean(target.closest(".sparvi-target-bar, .sparvi-tool-bar"));
   }
 
   function initializeStageLayout() {
@@ -870,6 +1348,7 @@
 
     const visible = canSendPointer();
     elements.stage.dataset.visible = visible ? "true" : "false";
+    renderToolBar();
   }
 
   function updateInstructorStageActive(active) {

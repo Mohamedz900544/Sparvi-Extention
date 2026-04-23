@@ -38,6 +38,7 @@ Client to server:
 - `join`
 - `cursor_move`
 - `click_pulse`
+- `tool_event`
 - `page_update`
 - `pointer_state`
 - `pointer_target`
@@ -50,13 +51,14 @@ Server to client:
 - `peer_status`
 - `cursor_move`
 - `click_pulse`
+- `tool_event`
 - `page_mismatch`
 - `pointer_state`
 - `pointer_target`
 - `error`
 - `pong`
 
-The server supports one instructor and multiple students per room. Cursor movement and click pulses are relayed only from the room instructor to either all students or the selected student target.
+The server supports one instructor and multiple students per room. Cursor movement, click pulses, and teaching tool events are relayed only from the room instructor to either all students or the selected student target.
 
 ## Notes
 
