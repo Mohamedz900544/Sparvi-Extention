@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sparvi Live Pointer</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <div>
+          <h1>Sparvi Pointer</h1>
+          <p id="connectionStatus">Disconnected</p>
+        </div>
+      </header>
+
+      <section class="field-group">
+        <label for="sessionId">Session ID</label>
+        <input id="sessionId" type="text" autocomplete="off" spellcheck="false" maxlength="100" placeholder="class-demo-1">
+      </section>
+
+      <fieldset class="role-group">
+        <legend>Role</legend>
+        <label>
+          <input type="radio" name="role" value="student" checked>
+          Student
+        </label>
+        <label>
+          <input type="radio" name="role" value="instructor">
+          Instructor
+        </label>
+      </fieldset>
+
+      <div class="button-row">
+        <button id="connectButton" class="primary-button" type="button">Connect</button>
+        <button id="disconnectButton" type="button">Disconnect</button>
+      </div>
+
+      <section class="status-panel" aria-live="polite">
+        <div>
+          <span>Page</span>
+          <strong id="pageUrl">Checking...</strong>
+        </div>
+        <div>
+          <span>Support</span>
+          <strong id="pageSupport">Checking...</strong>
+        </div>
+        <div>
+          <span>Room</span>
+          <strong id="roomInfo">Not joined</strong>
+        </div>
+      </section>
+
+      <section id="instructorControls" class="instructor-controls" hidden>
+        <button id="pointerToggleButton" class="primary-button" type="button">Start Live Pointer</button>
+        <button id="pulseButton" type="button">Click Pulse</button>
+      </section>
+
+      <p id="errorArea" class="error-area" role="status" hidden></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

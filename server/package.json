@@ -1,0 +1,19 @@
+{
+  "name": "sparvi-live-pointer-server",
+  "version": "0.1.0",
+  "description": "Local WebSocket backend for the Sparvi Live Pointer Chrome extension MVP.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "websocket",
+    "live-pointer"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
