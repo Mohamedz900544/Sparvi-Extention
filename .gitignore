@@ -1,0 +1,14 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyInstaller / desktop build outputs
+Sparvi Extention Desktop Python exe/build/
+Sparvi Extention Desktop Python exe/build-fresh/
+Sparvi Extention Desktop Python exe/dist/
+Sparvi Extention Desktop Python exe/dist-fresh/
+
+# Local scratch output
+.dist/
