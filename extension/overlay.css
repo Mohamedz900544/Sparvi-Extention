@@ -27,7 +27,7 @@
   border-radius: 8px !important;
   background: #f8fbff !important;
   box-shadow: 0 14px 40px rgba(15, 23, 42, 0.28), inset 0 0 0 1px #ffffff !important;
-  cursor: move !important;
+  cursor: default !important;
   opacity: 0 !important;
   pointer-events: auto !important;
   transform: translate(-50%, -50%) scale(0.98) !important;
@@ -63,6 +63,8 @@
   font-size: 12px !important;
   font-weight: 750 !important;
   line-height: 1.1 !important;
+  cursor: move !important;
+  pointer-events: auto !important;
   white-space: nowrap !important;
 }
 
