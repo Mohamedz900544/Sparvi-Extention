@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import signal
+import sys
 import time
 import uuid
 from dataclasses import dataclass
@@ -542,27 +544,55 @@ def is_authorized_instructor(state):
 
 
 async def main():
+    print(f"[boot] Python {sys.version}")
     print(f"[boot] Sparvi Desktop server listening on ws://{HOST}:{PORT}")
-    async with websockets.serve(
+
+    stop_event = asyncio.Event()
+
+    loop = asyncio.get_running_loop()
+
+    def _signal_handler():
+        print("[shutdown] Received termination signal, shutting down gracefully...")
+        stop_event.set()
+
+    # Register signal handlers for graceful shutdown (Linux/AlwaysData)
+    if sys.platform != "win32":
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, _signal_handler)
+    else:
+        # On Windows, only SIGINT (Ctrl+C) works via default KeyboardInterrupt
+        pass
+
+    server = await websockets.serve(
         handle_connection,
         HOST,
         PORT,
         ping_interval=20,
         ping_timeout=20
-    ):
-        await asyncio.Future()
+    )
+
+    print(f"[boot] Server started successfully, waiting for connections...")
+
+    await stop_event.wait()
+
+    print("[shutdown] Closing server...")
+    server.close()
+    await server.wait_closed()
+    print("[shutdown] Server stopped cleanly.")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except OSError as error:
-        if getattr(error, "errno", None) == 10048:
+        if getattr(error, "errno", None) == 10048 or getattr(error, "errno", None) == 98:
             print(
                 f"[error] Port {PORT} is already in use. "
                 f"Close the other server or run with a different PORT value."
             )
+            sys.exit(1)
         else:
             raise
     except KeyboardInterrupt:
         print("\n[shutdown] Server stopped.")
+
