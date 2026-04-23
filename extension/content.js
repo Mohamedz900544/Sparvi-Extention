@@ -10,6 +10,11 @@
   const SEND_INTERVAL_MS = 40;
   const REMOTE_HIDE_MS = 1500;
   const URL_POLL_INTERVAL_MS = 1000;
+  const STAGE_STORAGE_KEY = "sparviInstructorStageLayout";
+  const STAGE_MARGIN = 12;
+  const MIN_STAGE_WIDTH = 260;
+  const MIN_STAGE_HEIGHT = 170;
+  const DRAG_THRESHOLD_PX = 3;
 
   const runtimeState = {
     role: "student",
@@ -32,6 +37,19 @@
   let pendingMove = null;
   let pendingMoveTimer = null;
   let lastKnownUrl = window.location.href;
+  let stageListenersInstalled = false;
+  let suppressNextStageClick = false;
+  let suppressStageClickTimer = null;
+
+  const stageState = {
+    initialized: false,
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0
+  };
+
+  let stageInteraction = null;
 
   if (!isSupportedPage()) {
     console.info("[Sparvi] This page is unsupported. Live Pointer runs only on http and https pages.");
@@ -39,7 +57,9 @@
   }
 
   ensureOverlay();
+  initializeStageLayout();
   installInputListeners();
+  installStageInteractionListeners();
   installUrlChangeDetection();
   announcePage();
   requestInitialState();
@@ -97,10 +117,14 @@
       root.innerHTML = [
         '<div class="sparvi-instructor-stage" data-visible="false" data-active="false">',
         '  <div class="sparvi-stage-title">Live Pointer Area</div>',
-        '  <div class="sparvi-stage-corner sparvi-stage-corner-tl"></div>',
-        '  <div class="sparvi-stage-corner sparvi-stage-corner-tr"></div>',
-        '  <div class="sparvi-stage-corner sparvi-stage-corner-bl"></div>',
-        '  <div class="sparvi-stage-corner sparvi-stage-corner-br"></div>',
+        '  <div class="sparvi-stage-corner sparvi-stage-corner-tl" data-resize="nw"></div>',
+        '  <div class="sparvi-stage-corner sparvi-stage-corner-tr" data-resize="ne"></div>',
+        '  <div class="sparvi-stage-corner sparvi-stage-corner-bl" data-resize="sw"></div>',
+        '  <div class="sparvi-stage-corner sparvi-stage-corner-br" data-resize="se"></div>',
+        '  <div class="sparvi-stage-edge sparvi-stage-edge-top" data-resize="n"></div>',
+        '  <div class="sparvi-stage-edge sparvi-stage-edge-right" data-resize="e"></div>',
+        '  <div class="sparvi-stage-edge sparvi-stage-edge-bottom" data-resize="s"></div>',
+        '  <div class="sparvi-stage-edge sparvi-stage-edge-left" data-resize="w"></div>',
         '</div>',
         '<div class="sparvi-pointer" data-visible="false">',
         '  <div class="sparvi-cursor-shape"></div>',
@@ -124,8 +148,21 @@
     document.addEventListener("click", handleClick, { capture: true, passive: true });
   }
 
+  function installStageInteractionListeners() {
+    if (stageListenersInstalled) {
+      return;
+    }
+
+    stageListenersInstalled = true;
+    elements.stage.addEventListener("pointerdown", handleStagePointerDown, { capture: true });
+    document.addEventListener("pointermove", handleStagePointerMove, { capture: true });
+    document.addEventListener("pointerup", handleStagePointerUp, { capture: true });
+    document.addEventListener("pointercancel", handleStagePointerUp, { capture: true });
+    window.addEventListener("resize", keepStageInsideViewport);
+  }
+
   function handleMouseMove(event) {
-    if (!canSendPointer()) {
+    if (!canSendPointer() || stageInteraction) {
       return;
     }
 
@@ -177,6 +214,11 @@
 
   function handleClick(event) {
     if (!canSendPointer()) {
+      return;
+    }
+
+    if (suppressNextStageClick) {
+      clearStageClickSuppression();
       return;
     }
 
@@ -254,6 +296,163 @@
       `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`,
       "important"
     );
+  }
+
+  function handleStagePointerDown(event) {
+    if (!canSendPointer() || event.button !== 0) {
+      return;
+    }
+
+    ensureOverlay();
+    const rect = elements.stage.getBoundingClientRect();
+    const resizeMode = event.target && event.target.dataset ? event.target.dataset.resize || "" : "";
+
+    stageInteraction = {
+      mode: resizeMode ? "resize" : "drag",
+      resizeMode,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+      startWidth: rect.width,
+      startHeight: rect.height,
+      moved: false
+    };
+
+    elements.stage.dataset.moving = "true";
+
+    try {
+      elements.stage.setPointerCapture(event.pointerId);
+    } catch (error) {
+      // Some pages or browsers may not allow capture here; document listeners still handle movement.
+    }
+  }
+
+  function handleStagePointerMove(event) {
+    if (!stageInteraction || event.pointerId !== stageInteraction.pointerId) {
+      return;
+    }
+
+    const dx = event.clientX - stageInteraction.startX;
+    const dy = event.clientY - stageInteraction.startY;
+    const movedEnough = Math.abs(dx) > DRAG_THRESHOLD_PX || Math.abs(dy) > DRAG_THRESHOLD_PX;
+
+    if (!stageInteraction.moved && !movedEnough) {
+      return;
+    }
+
+    stageInteraction.moved = true;
+    suppressStageClickBriefly();
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextLayout = stageInteraction.mode === "resize"
+      ? getResizedStageLayout(stageInteraction, dx, dy)
+      : getDraggedStageLayout(stageInteraction, dx, dy);
+
+    applyStageLayout(nextLayout);
+  }
+
+  function handleStagePointerUp(event) {
+    if (!stageInteraction || event.pointerId !== stageInteraction.pointerId) {
+      return;
+    }
+
+    const moved = stageInteraction.moved;
+
+    try {
+      elements.stage.releasePointerCapture(stageInteraction.pointerId);
+    } catch (error) {
+      // Capture may already be released by the browser.
+    }
+
+    stageInteraction = null;
+    elements.stage.dataset.moving = "false";
+
+    if (moved) {
+      suppressStageClickBriefly();
+      saveStageLayout();
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function suppressStageClickBriefly() {
+    suppressNextStageClick = true;
+
+    if (suppressStageClickTimer) {
+      clearTimeout(suppressStageClickTimer);
+    }
+
+    suppressStageClickTimer = setTimeout(() => {
+      suppressNextStageClick = false;
+      suppressStageClickTimer = null;
+    }, 250);
+  }
+
+  function clearStageClickSuppression() {
+    suppressNextStageClick = false;
+
+    if (suppressStageClickTimer) {
+      clearTimeout(suppressStageClickTimer);
+      suppressStageClickTimer = null;
+    }
+  }
+
+  function getDraggedStageLayout(interaction, dx, dy) {
+    return constrainStageLayout({
+      left: interaction.startLeft + dx,
+      top: interaction.startTop + dy,
+      width: interaction.startWidth,
+      height: interaction.startHeight
+    });
+  }
+
+  function getResizedStageLayout(interaction, dx, dy) {
+    const limits = getStageLimits();
+    const mode = interaction.resizeMode;
+    const right = interaction.startLeft + interaction.startWidth;
+    const bottom = interaction.startTop + interaction.startHeight;
+
+    let left = interaction.startLeft;
+    let top = interaction.startTop;
+    let width = interaction.startWidth;
+    let height = interaction.startHeight;
+
+    if (mode.includes("e")) {
+      width = clampRange(interaction.startWidth + dx, limits.minWidth, limits.maxWidth);
+      width = Math.min(width, Math.max(limits.minWidth, window.innerWidth - STAGE_MARGIN - left));
+    }
+
+    if (mode.includes("s")) {
+      height = clampRange(interaction.startHeight + dy, limits.minHeight, limits.maxHeight);
+      height = Math.min(height, Math.max(limits.minHeight, window.innerHeight - STAGE_MARGIN - top));
+    }
+
+    if (mode.includes("w")) {
+      const maxLeft = right - limits.minWidth;
+      left = clampRange(interaction.startLeft + dx, STAGE_MARGIN, maxLeft);
+      width = right - left;
+
+      if (width > limits.maxWidth) {
+        width = limits.maxWidth;
+        left = right - width;
+      }
+    }
+
+    if (mode.includes("n")) {
+      const maxTop = bottom - limits.minHeight;
+      top = clampRange(interaction.startTop + dy, STAGE_MARGIN, maxTop);
+      height = bottom - top;
+
+      if (height > limits.maxHeight) {
+        height = limits.maxHeight;
+        top = bottom - height;
+      }
+    }
+
+    return constrainStageLayout({ left, top, width, height });
   }
 
   function hidePointer() {
@@ -378,6 +577,113 @@
     return runtimeState.role === "instructor" && runtimeState.connected && runtimeState.pointerEnabled;
   }
 
+  function initializeStageLayout() {
+    if (stageState.initialized) {
+      return;
+    }
+
+    stageState.initialized = true;
+    applyStageLayout(getDefaultStageLayout());
+
+    chrome.storage.local.get(STAGE_STORAGE_KEY, (stored) => {
+      void chrome.runtime.lastError;
+      const savedLayout = stored && stored[STAGE_STORAGE_KEY];
+      if (isValidStageLayout(savedLayout)) {
+        applyStageLayout(savedLayout);
+      }
+    });
+  }
+
+  function getDefaultStageLayout() {
+    const limits = getStageLimits();
+    const width = clampRange(760, limits.minWidth, limits.maxWidth);
+    const height = clampRange(460, limits.minHeight, limits.maxHeight);
+
+    return {
+      left: Math.round((window.innerWidth - width) / 2),
+      top: Math.round((window.innerHeight - height) / 2),
+      width,
+      height
+    };
+  }
+
+  function keepStageInsideViewport() {
+    if (!stageState.initialized) {
+      return;
+    }
+
+    applyStageLayout(stageState);
+    saveStageLayout();
+  }
+
+  function applyStageLayout(layout) {
+    ensureOverlay();
+
+    const constrained = constrainStageLayout(layout);
+    stageState.left = constrained.left;
+    stageState.top = constrained.top;
+    stageState.width = constrained.width;
+    stageState.height = constrained.height;
+
+    elements.stage.style.setProperty("left", `${Math.round(stageState.left)}px`, "important");
+    elements.stage.style.setProperty("top", `${Math.round(stageState.top)}px`, "important");
+    elements.stage.style.setProperty("width", `${Math.round(stageState.width)}px`, "important");
+    elements.stage.style.setProperty("height", `${Math.round(stageState.height)}px`, "important");
+    elements.stage.style.setProperty("right", "auto", "important");
+    elements.stage.style.setProperty("bottom", "auto", "important");
+    elements.stage.style.setProperty("transform", "none", "important");
+  }
+
+  function constrainStageLayout(layout) {
+    const limits = getStageLimits();
+    const width = clampRange(finiteOr(layout.width, limits.maxWidth), limits.minWidth, limits.maxWidth);
+    const height = clampRange(finiteOr(layout.height, limits.maxHeight), limits.minHeight, limits.maxHeight);
+    const maxLeft = Math.max(STAGE_MARGIN, window.innerWidth - width - STAGE_MARGIN);
+    const maxTop = Math.max(STAGE_MARGIN, window.innerHeight - height - STAGE_MARGIN);
+
+    return {
+      left: clampRange(finiteOr(layout.left, STAGE_MARGIN), STAGE_MARGIN, maxLeft),
+      top: clampRange(finiteOr(layout.top, STAGE_MARGIN), STAGE_MARGIN, maxTop),
+      width,
+      height
+    };
+  }
+
+  function getStageLimits() {
+    const maxWidth = Math.max(160, window.innerWidth - STAGE_MARGIN * 2);
+    const maxHeight = Math.max(120, window.innerHeight - STAGE_MARGIN * 2);
+
+    return {
+      minWidth: Math.min(MIN_STAGE_WIDTH, maxWidth),
+      minHeight: Math.min(MIN_STAGE_HEIGHT, maxHeight),
+      maxWidth,
+      maxHeight
+    };
+  }
+
+  function saveStageLayout() {
+    const layout = {
+      left: Math.round(stageState.left),
+      top: Math.round(stageState.top),
+      width: Math.round(stageState.width),
+      height: Math.round(stageState.height)
+    };
+
+    chrome.storage.local.set({ [STAGE_STORAGE_KEY]: layout }, () => {
+      void chrome.runtime.lastError;
+    });
+  }
+
+  function isValidStageLayout(layout) {
+    return Boolean(
+      layout &&
+      Number.isFinite(Number(layout.left)) &&
+      Number.isFinite(Number(layout.top)) &&
+      Number.isFinite(Number(layout.width)) &&
+      Number.isFinite(Number(layout.height))
+    );
+  }
+
   function getInstructorStagePoint(event) {
     ensureOverlay();
 
@@ -431,6 +737,15 @@
     }
 
     return Math.max(0, Math.min(1, number));
+  }
+
+  function clampRange(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function finiteOr(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
   }
 
   function sendToWorker(message, callback) {

@@ -15,7 +15,7 @@
   pointer-events: none !important;
 }
 
-.sparvi-instructor-stage {
+#sparvi-live-pointer-root .sparvi-instructor-stage {
   position: fixed !important;
   left: 50% !important;
   top: 50% !important;
@@ -23,25 +23,32 @@
   height: min(460px, calc(100vh - 96px)) !important;
   min-width: min(300px, calc(100vw - 24px)) !important;
   min-height: 180px !important;
-  border: 2px solid rgba(37, 99, 235, 0.72) !important;
+  border: 2px solid #2563eb !important;
   border-radius: 8px !important;
-  background: rgba(37, 99, 235, 0.07) !important;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.48) !important;
+  background: #f8fbff !important;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.28), inset 0 0 0 1px #ffffff !important;
+  cursor: move !important;
   opacity: 0 !important;
+  pointer-events: auto !important;
   transform: translate(-50%, -50%) scale(0.98) !important;
   transition: opacity 140ms ease, transform 140ms ease, border-color 120ms ease, background 120ms ease !important;
+  user-select: none !important;
   visibility: hidden !important;
 }
 
-.sparvi-instructor-stage[data-visible="true"] {
+#sparvi-live-pointer-root .sparvi-instructor-stage[data-visible="true"] {
   opacity: 1 !important;
   transform: translate(-50%, -50%) scale(1) !important;
   visibility: visible !important;
 }
 
-.sparvi-instructor-stage[data-active="true"] {
-  border-color: rgba(20, 184, 166, 0.9) !important;
-  background: rgba(20, 184, 166, 0.1) !important;
+#sparvi-live-pointer-root .sparvi-instructor-stage[data-active="true"] {
+  border-color: #14b8a6 !important;
+  background: #f0fdfa !important;
+}
+
+#sparvi-live-pointer-root .sparvi-instructor-stage[data-moving="true"] {
+  transition: none !important;
 }
 
 .sparvi-stage-title {
@@ -59,17 +66,23 @@
   white-space: nowrap !important;
 }
 
-.sparvi-stage-corner {
+#sparvi-live-pointer-root .sparvi-stage-corner,
+#sparvi-live-pointer-root .sparvi-stage-edge {
   position: absolute !important;
-  width: 28px !important;
-  height: 28px !important;
-  border-color: rgba(37, 99, 235, 0.95) !important;
+  pointer-events: auto !important;
+  z-index: 2 !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-corner {
+  width: 32px !important;
+  height: 32px !important;
+  border-color: #1d4ed8 !important;
   border-style: solid !important;
   transition: border-color 120ms ease !important;
 }
 
-.sparvi-instructor-stage[data-active="true"] .sparvi-stage-corner {
-  border-color: rgba(20, 184, 166, 0.98) !important;
+#sparvi-live-pointer-root .sparvi-instructor-stage[data-active="true"] .sparvi-stage-corner {
+  border-color: #0f766e !important;
 }
 
 .sparvi-stage-corner-tl {
@@ -77,6 +90,7 @@
   top: -2px !important;
   border-width: 4px 0 0 4px !important;
   border-top-left-radius: 8px !important;
+  cursor: nwse-resize !important;
 }
 
 .sparvi-stage-corner-tr {
@@ -84,6 +98,7 @@
   top: -2px !important;
   border-width: 4px 4px 0 0 !important;
   border-top-right-radius: 8px !important;
+  cursor: nesw-resize !important;
 }
 
 .sparvi-stage-corner-bl {
@@ -91,6 +106,7 @@
   bottom: -2px !important;
   border-width: 0 0 4px 4px !important;
   border-bottom-left-radius: 8px !important;
+  cursor: nesw-resize !important;
 }
 
 .sparvi-stage-corner-br {
@@ -98,6 +114,39 @@
   bottom: -2px !important;
   border-width: 0 4px 4px 0 !important;
   border-bottom-right-radius: 8px !important;
+  cursor: nwse-resize !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-top,
+#sparvi-live-pointer-root .sparvi-stage-edge-bottom {
+  left: 30px !important;
+  right: 30px !important;
+  height: 14px !important;
+  cursor: ns-resize !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-top {
+  top: -7px !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-bottom {
+  bottom: -7px !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-left,
+#sparvi-live-pointer-root .sparvi-stage-edge-right {
+  top: 30px !important;
+  bottom: 30px !important;
+  width: 14px !important;
+  cursor: ew-resize !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-left {
+  left: -7px !important;
+}
+
+#sparvi-live-pointer-root .sparvi-stage-edge-right {
+  right: -7px !important;
 }
 
 .sparvi-pointer {
