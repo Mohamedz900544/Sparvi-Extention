@@ -13,6 +13,8 @@
   const STAGE_STORAGE_KEY = "sparviInstructorStageLayout";
   const STAGE_MARGIN = 12;
   const STAGE_TOP_MARGIN = 64;
+  const STAGE_TOOLBAR_GAP = 14;
+  const STAGE_TOOLBAR_WIDTH = 72;
   const MIN_STAGE_WIDTH = 260;
   const MIN_STAGE_HEIGHT = 170;
   const DRAG_THRESHOLD_PX = 3;
@@ -615,7 +617,7 @@
 
     if (mode.includes("e")) {
       width = clampRange(interaction.startWidth + dx, limits.minWidth, limits.maxWidth);
-      width = Math.min(width, Math.max(limits.minWidth, window.innerWidth - STAGE_MARGIN - left));
+      width = Math.min(width, Math.max(limits.minWidth, getStageMaxRight() - left));
     }
 
     if (mode.includes("s")) {
@@ -1270,7 +1272,7 @@
     const limits = getStageLimits();
     const width = clampRange(finiteOr(layout.width, limits.maxWidth), limits.minWidth, limits.maxWidth);
     const height = clampRange(finiteOr(layout.height, limits.maxHeight), limits.minHeight, limits.maxHeight);
-    const maxLeft = Math.max(STAGE_MARGIN, window.innerWidth - width - STAGE_MARGIN);
+    const maxLeft = Math.max(STAGE_MARGIN, getStageMaxRight() - width);
     const maxTop = Math.max(STAGE_TOP_MARGIN, window.innerHeight - height - STAGE_MARGIN);
 
     return {
@@ -1282,7 +1284,7 @@
   }
 
   function getStageLimits() {
-    const maxWidth = Math.max(160, window.innerWidth - STAGE_MARGIN * 2);
+    const maxWidth = Math.max(160, window.innerWidth - STAGE_MARGIN - getStageRightReserve() - STAGE_MARGIN);
     const maxHeight = Math.max(120, window.innerHeight - STAGE_TOP_MARGIN - STAGE_MARGIN);
 
     return {
@@ -1348,6 +1350,9 @@
 
     const visible = canSendPointer();
     elements.stage.dataset.visible = visible ? "true" : "false";
+    if (stageState.initialized) {
+      applyStageLayout(stageState);
+    }
     renderToolBar();
   }
 
@@ -1379,6 +1384,14 @@
   function finiteOr(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
+  }
+
+  function getStageRightReserve() {
+    return canSendPointer() ? STAGE_TOOLBAR_WIDTH + STAGE_TOOLBAR_GAP : 0;
+  }
+
+  function getStageMaxRight() {
+    return window.innerWidth - STAGE_MARGIN - getStageRightReserve();
   }
 
   function sendToWorker(message, callback) {
