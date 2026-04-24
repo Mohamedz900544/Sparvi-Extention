@@ -118,7 +118,7 @@ class DesktopPointerWindow(QWidget):
 
     def build_ui(self):
         self.setWindowTitle("Sparvi Desktop Pointer")
-        self.setMinimumSize(560, 520)
+        self.setMinimumSize(560, 460)
         app_icon = load_app_icon()
         if not app_icon.isNull():
             self.setWindowIcon(app_icon)
@@ -180,19 +180,10 @@ class DesktopPointerWindow(QWidget):
         self.connection_value = QLabel("Disconnected")
         self.role_value = QLabel("Student")
         self.room_value = QLabel("Not joined")
-        self.peer_value = QLabel("Waiting")
-        self.surface_value = QLabel("Desktop")
-        self.surface_value.setWordWrap(True)
-        self.target_value = QLabel("All students")
-        self.tool_value = QLabel("Pointer")
 
         status_form.addRow("Connection", self.connection_value)
         status_form.addRow("Role", self.role_value)
         status_form.addRow("Room", self.room_value)
-        status_form.addRow("Audience", self.peer_value)
-        status_form.addRow("Target", self.target_value)
-        status_form.addRow("Tool", self.tool_value)
-        status_form.addRow("Current app", self.surface_value)
 
         status_layout.addLayout(status_header)
         status_layout.addLayout(status_form)
@@ -900,44 +891,6 @@ class DesktopPointerWindow(QWidget):
         self.local_error = ""
         self.update_ui()
 
-    def format_peer_value(self):
-        if self.current_role() == "instructor":
-            count = int(self.peer_state.get("studentCount", 0))
-            if count == 0:
-                return "No students connected"
-            if count == 1:
-                return "1 student connected"
-            return f"{count} students connected"
-
-        if not self.peer_state.get("instructorConnected"):
-            return "Waiting for teacher"
-        if self.peer_state.get("pointerEnabled"):
-            return "Teacher is live"
-        return "Teacher connected"
-
-    def format_target_value(self):
-        if self.current_role() != "instructor":
-            return "Teacher controlled"
-        if self.pointer_target_client_id == "all":
-            return "All students"
-        for student in self.peer_state.get("students", []):
-            if student.get("clientId") == self.pointer_target_client_id:
-                return student.get("displayName", "Student")
-        return "All students"
-
-    def format_tool_value(self):
-        labels = {
-            "pointer": "Pointer",
-            "laser": "Laser",
-            "arrow": "Arrow",
-            "circle": "Circle",
-            "underline": "Underline",
-            "highlight": "Highlight",
-            "freeze": "Pin",
-            "hotspot": "Step"
-        }
-        return labels.get(self.current_tool_mode, "Pointer")
-
     def format_helper_text(self):
         if self.connection_status != "connected":
             if self.current_role() == "instructor":
@@ -962,10 +915,6 @@ class DesktopPointerWindow(QWidget):
         self.role_value.setText(role.capitalize())
         self.connection_value.setText(self.connection_status.capitalize())
         self.room_value.setText(room_text)
-        self.peer_value.setText(self.format_peer_value())
-        self.target_value.setText(self.format_target_value())
-        self.tool_value.setText(self.format_tool_value())
-        self.surface_value.setText(self.current_context or "Desktop")
         self.helper_label.setText(self.format_helper_text())
 
         badge_text = {
