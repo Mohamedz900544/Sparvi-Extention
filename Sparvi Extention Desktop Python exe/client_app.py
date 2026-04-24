@@ -1,9 +1,10 @@
 import ctypes
+import os
 import sys
 import time
 
 from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtGui import QCursor, QFont
+from PySide6.QtGui import QCursor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -33,13 +34,32 @@ from stage_window import InstructorStageWindow
 
 SEND_INTERVAL_SECONDS = 1 / 30
 TOOL_SEND_INTERVAL_SECONDS = 1 / 22
-HARDCODED_SERVER_URL = "wss://your-app.alwaysdata.net"
+HARDCODED_SERVER_URL = "wss://sparvishare.alwaysdata.net"
 DRAW_TOOL_MODES = {"arrow", "circle", "underline"}
 TOOL_KIND_MAP = {
     "arrow": "draw_arrow",
     "circle": "draw_circle",
     "underline": "draw_underline"
 }
+
+
+def resource_path(filename):
+    base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_dir, filename)
+
+
+def load_logo_pixmap():
+    logo_path = resource_path("logo.png")
+    if not os.path.exists(logo_path):
+        return QPixmap()
+    return QPixmap(logo_path)
+
+
+def load_app_icon():
+    icon_path = resource_path("icon.png")
+    if not os.path.exists(icon_path):
+        return QIcon()
+    return QIcon(icon_path)
 
 
 class DesktopPointerWindow(QWidget):
@@ -99,10 +119,21 @@ class DesktopPointerWindow(QWidget):
     def build_ui(self):
         self.setWindowTitle("Sparvi Desktop Pointer")
         self.setMinimumSize(560, 520)
+        app_icon = load_app_icon()
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(18, 18, 18, 18)
         outer_layout.setSpacing(12)
+
+        logo_label = QLabel()
+        logo_label.setObjectName("LogoLabel")
+        logo_pixmap = load_logo_pixmap()
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaledToHeight(54, Qt.TransformationMode.SmoothTransformation)
+            )
 
         title_label = QLabel("Sparvi Desktop Pointer")
         title_font = QFont("Segoe UI", 17)
@@ -113,10 +144,16 @@ class DesktopPointerWindow(QWidget):
         subtitle_label.setWordWrap(True)
         subtitle_label.setObjectName("SubtitleLabel")
 
-        header_layout = QVBoxLayout()
-        header_layout.setSpacing(4)
-        header_layout.addWidget(title_label)
-        header_layout.addWidget(subtitle_label)
+        header_text_layout = QVBoxLayout()
+        header_text_layout.setSpacing(4)
+        header_text_layout.addWidget(title_label)
+        header_text_layout.addWidget(subtitle_label)
+
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
+        if not logo_pixmap.isNull():
+            header_layout.addWidget(logo_label, 0, Qt.AlignmentFlag.AlignTop)
+        header_layout.addLayout(header_text_layout, 1)
         outer_layout.addLayout(header_layout)
 
         self.status_card = self.create_card()
@@ -180,11 +217,6 @@ class DesktopPointerWindow(QWidget):
         self.role_input.addItem("Student", "student")
         self.role_input.addItem("Instructor", "instructor")
 
-        self.server_value = QLabel(HARDCODED_SERVER_URL)
-        self.server_value.setObjectName("ServerValue")
-        self.server_value.setWordWrap(True)
-
-        form_layout.addRow("Server", self.server_value)
         form_layout.addRow("Session ID", self.session_input)
         form_layout.addRow("Role", self.role_input)
 
@@ -271,6 +303,12 @@ class DesktopPointerWindow(QWidget):
                 color: #55627a;
                 font-size: 12px;
             }
+            QLabel#LogoLabel {
+                min-width: 54px;
+                min-height: 54px;
+                max-width: 150px;
+                background: transparent;
+            }
             QLabel#SectionTitle {
                 color: #0f172a;
                 font-size: 13px;
@@ -301,14 +339,6 @@ class DesktopPointerWindow(QWidget):
                 padding: 10px 12px;
                 color: #991b1b;
                 font-weight: 600;
-            }
-            QLabel#ServerValue {
-                min-height: 38px;
-                padding: 9px 10px;
-                border: 1px solid #d7deea;
-                border-radius: 8px;
-                background: #f8fafc;
-                color: #334155;
             }
             QLineEdit, QComboBox {
                 min-height: 38px;
@@ -1007,6 +1037,9 @@ def enable_windows_dpi_awareness():
 def main():
     enable_windows_dpi_awareness()
     app = QApplication(sys.argv)
+    app_icon = load_app_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
     window = DesktopPointerWindow()
     window.show()
     sys.exit(app.exec())

@@ -31,6 +31,8 @@ python -m PyInstaller ^
   --clean ^
   --windowed ^
   --onefile ^
+  --add-data "logo.png;." ^
+  --add-data "icon.png;." ^
   --distpath "%DIST_DIR%" ^
   --workpath "%WORK_DIR%" ^
   --specpath "%SPEC_DIR%" ^
