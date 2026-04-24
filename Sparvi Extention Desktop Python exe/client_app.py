@@ -217,8 +217,14 @@ class DesktopPointerWindow(QWidget):
         self.role_input.addItem("Student", "student")
         self.role_input.addItem("Instructor", "instructor")
 
+        self.password_label = QLabel("Instructor Password")
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Enter your access password")
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+
         form_layout.addRow("Session ID", self.session_input)
         form_layout.addRow("Role", self.role_input)
+        form_layout.addRow(self.password_label, self.password_input)
 
         connection_buttons = QHBoxLayout()
         connection_buttons.setSpacing(8)
@@ -412,9 +418,14 @@ class DesktopPointerWindow(QWidget):
         room_id = self.session_input.text().strip()
         server_url = HARDCODED_SERVER_URL
         role = self.current_role()
+        instructor_password = self.password_input.text().strip() if role == "instructor" else ""
 
         if not room_id:
             self.set_error("Enter a session ID first.")
+            return
+
+        if role == "instructor" and not instructor_password:
+            self.set_error("Enter the instructor password before connecting.")
             return
 
         self.save_settings()
@@ -431,6 +442,7 @@ class DesktopPointerWindow(QWidget):
             server_url=server_url,
             room_id=room_id,
             role=role,
+            instructor_password=instructor_password,
             current_context=self.current_context,
             pointer_enabled=self.pointer_enabled,
             target_client_id=self.pointer_target_client_id
@@ -491,6 +503,8 @@ class DesktopPointerWindow(QWidget):
         self.overlay.show_click_pulse(normalized["xRatio"], normalized["yRatio"])
 
     def handle_role_changed(self):
+        if self.current_role() != "instructor":
+            self.password_input.clear()
         self.pointer_enabled = False
         self.pointer_target_client_id = "all"
         self.current_tool_mode = "pointer"
@@ -926,6 +940,8 @@ class DesktopPointerWindow(QWidget):
 
     def format_helper_text(self):
         if self.connection_status != "connected":
+            if self.current_role() == "instructor":
+                return "Enter the room ID and your instructor password, then connect. The server will verify the password before opening the teaching session."
             return "Run the server, open the app on both devices, join the same room, then connect."
 
         if self.current_role() == "instructor":
@@ -970,6 +986,9 @@ class DesktopPointerWindow(QWidget):
         self.disconnect_button.setDisabled(not connected and not busy)
         self.session_input.setDisabled(connected or busy)
         self.role_input.setDisabled(connected or busy)
+        self.password_label.setVisible(is_instructor)
+        self.password_input.setVisible(is_instructor)
+        self.password_input.setDisabled(connected or busy)
 
         self.instructor_card.setVisible(is_instructor)
         self.pointer_button.setDisabled(not connected or not is_instructor)

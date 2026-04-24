@@ -6,6 +6,7 @@ This folder contains a desktop Python version of Sparvi that works on top of nor
 
 - Instructor and student both run the desktop app
 - Both join the same room ID
+- Instructor access can be protected by a password verified by your own web endpoint
 - Instructor can start live pointer mode
 - Instructor gets a floating draggable and resizable teaching frame
 - Only movement and clicks inside the teaching frame are sent
@@ -71,6 +72,27 @@ The backend listens on:
 ws://localhost:8790
 ```
 
+To protect instructor access, run the server with these environment variables:
+
+```powershell
+$env:INSTRUCTOR_AUTH_URL="https://your-dashboard.example.com/api/sparvi/verify-password"
+$env:INSTRUCTOR_AUTH_BEARER_TOKEN="your-server-to-dashboard-secret"
+python server.py
+```
+
+Alias names are also supported if your dashboard already uses them:
+
+```powershell
+$env:SPARVI_INSTRUCTOR_AUTH_URL="https://your-dashboard.example.com/api/sparvi/verify-password"
+$env:SPARVI_SERVER_SHARED_SECRET="your-server-to-dashboard-secret"
+python server.py
+```
+
+Optional server auth settings:
+
+- `INSTRUCTOR_AUTH_TIMEOUT_SECONDS` - defaults to `8`
+- `INSTRUCTOR_AUTH_VERIFY_TLS` - defaults to `true`
+
 ### Start the desktop app
 
 ```powershell
@@ -89,12 +111,13 @@ Or double-click:
 1. Open the app
 2. Enter a room ID
 3. Choose `Instructor`
-4. Click `Connect`
-5. Click `Start Live Pointer`
-6. A floating teaching frame appears on the desktop
-7. Move the mouse inside the frame
-8. Use the target avatars above the frame to send to all students or one student
-9. Use the tool bar on the right side of the frame for teaching tools
+4. Enter the instructor password
+5. Click `Connect`
+6. Click `Start Live Pointer`
+7. A floating teaching frame appears on the desktop
+8. Move the mouse inside the frame
+9. Use the target avatars above the frame to send to all students or one student
+10. Use the tool bar on the right side of the frame for teaching tools
 
 ### On the student machine
 
@@ -124,6 +147,7 @@ dist\Sparvi Desktop Pointer.exe
 - The active-window warning is a lightweight desktop equivalent to the browser page mismatch warning
 - The desktop `highlight` tool is an approximate spotlight box, not a real DOM element highlighter, because desktop apps do not expose page elements like websites do
 - The client app uses a hardcoded server URL from `client_app.py` via the `HARDCODED_SERVER_URL` constant
+- The instructor password is not saved in `QSettings`; it stays only in memory for the current app session
 
 ## Good next upgrades
 
@@ -131,3 +155,55 @@ dist\Sparvi Desktop Pointer.exe
 - voice channel
 - signed Windows installer
 - better multi-monitor mapping
+
+## Instructor auth endpoint contract
+
+When someone tries to join as `Instructor`, the server sends a `POST` request to your dashboard endpoint:
+
+```json
+{
+  "password": "the-password-entered-in-the-app",
+  "roomId": "class-demo-1",
+  "clientId": "generated-client-id",
+  "role": "instructor",
+  "source": "sparvi-desktop",
+  "timestamp": 1713920000000
+}
+```
+
+If `INSTRUCTOR_AUTH_BEARER_TOKEN` is set, the server also sends:
+
+```text
+Authorization: Bearer your-server-to-dashboard-secret
+```
+
+The desktop server also mirrors the same secret in these headers for dashboard compatibility:
+
+```text
+X-Sparvi-Server-Secret: your-server-to-dashboard-secret
+X-Sparvi-Server-Shared-Secret: your-server-to-dashboard-secret
+X-Shared-Secret: your-server-to-dashboard-secret
+X-API-Key: your-server-to-dashboard-secret
+```
+
+Your endpoint should return one of these success shapes:
+
+```json
+{ "ok": true }
+```
+
+```json
+{ "authorized": true }
+```
+
+```json
+{ "allow": true }
+```
+
+If the password is wrong, return a denial such as:
+
+```json
+{ "ok": false, "message": "Invalid instructor password" }
+```
+
+or HTTP `401` / `403` with a similar JSON body.

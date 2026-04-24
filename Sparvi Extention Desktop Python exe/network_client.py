@@ -36,6 +36,7 @@ class NetworkClient(QObject):
         self._server_url = "ws://localhost:8790"
         self._room_id = ""
         self._role = "student"
+        self._instructor_password = ""
         self._current_context = "Desktop"
         self._pointer_enabled = False
         self._pointer_target_client_id = "all"
@@ -47,12 +48,13 @@ class NetworkClient(QObject):
     def connected(self):
         return self._connected
 
-    def connect_to_server(self, server_url, room_id, role, current_context, pointer_enabled, target_client_id="all"):
+    def connect_to_server(self, server_url, room_id, role, current_context, pointer_enabled, target_client_id="all", instructor_password=""):
         self.disconnect(clear_room=False)
 
         self._server_url = str(server_url or "ws://localhost:8790").strip()
         self._room_id = str(room_id or "").strip()
         self._role = role if role in ("instructor", "student") else "student"
+        self._instructor_password = str(instructor_password or "").strip() if self._role == "instructor" else ""
         self._current_context = str(current_context or "Desktop").strip() or "Desktop"
         self._pointer_enabled = bool(pointer_enabled)
         self._pointer_target_client_id = normalize_target(target_client_id)
@@ -86,6 +88,7 @@ class NetworkClient(QObject):
 
         if clear_room:
             self._room_id = ""
+            self._instructor_password = ""
         self._server_features = {
             "toolEvent": False
         }
@@ -202,6 +205,7 @@ class NetworkClient(QObject):
             "type": "join",
             "roomId": self._room_id,
             "role": self._role,
+            "instructorPassword": self._instructor_password if self._role == "instructor" else "",
             "currentContext": self._current_context,
             "pointerEnabled": self._pointer_enabled,
             "targetClientId": self._pointer_target_client_id
@@ -252,7 +256,26 @@ class NetworkClient(QObject):
             return
 
         if message_type == "error":
-            self.error_received.emit(message.get("message", "Server returned an error."))
+            error_message = message.get("message", "Server returned an error.")
+            self.error_received.emit(error_message)
+            if message.get("fatal"):
+                self._stop_after_fatal_error()
+
+    def _stop_after_fatal_error(self):
+        self._manual_disconnect = True
+        self._clear_reconnect_timer()
+
+        socket_app = self._socket_app
+        self._socket_app = None
+        self._connected = False
+
+        if socket_app is not None:
+            try:
+                socket_app.close()
+            except Exception:
+                pass
+
+        self.connection_changed.emit("disconnected")
 
     def _on_error(self, _socket, error):
         if self._manual_disconnect:

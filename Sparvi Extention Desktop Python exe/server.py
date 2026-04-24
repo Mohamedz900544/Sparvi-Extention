@@ -2,16 +2,41 @@ import asyncio
 import json
 import os
 import signal
+import ssl
 import sys
 import time
 import uuid
 from dataclasses import dataclass
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 import websockets
 
 
+def first_env(*names):
+    for name in names:
+        value = str(os.getenv(name) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+TEST_INSTRUCTOR_AUTH_URL = "https://sparvilab.alwaysdata.net/api/sparvi/verify-password"
+TEST_INSTRUCTOR_SHARED_SECRET = "fdvdvfd5v0fv0fv5df0vfd5v5fd0vd"
+
+
 HOST = os.getenv("HOST") or os.getenv("IP") or "0.0.0.0"
 PORT = int(os.getenv("PORT", "8790"))
+INSTRUCTOR_AUTH_URL = first_env("INSTRUCTOR_AUTH_URL", "SPARVI_INSTRUCTOR_AUTH_URL") or TEST_INSTRUCTOR_AUTH_URL
+INSTRUCTOR_AUTH_BEARER_TOKEN = first_env(
+    "INSTRUCTOR_AUTH_BEARER_TOKEN",
+    "SPARVI_SERVER_SHARED_SECRET",
+    "SPARVI_SHARED_SECRET"
+) or TEST_INSTRUCTOR_SHARED_SECRET
+INSTRUCTOR_AUTH_TIMEOUT_SECONDS = max(1.0, float(os.getenv("INSTRUCTOR_AUTH_TIMEOUT_SECONDS", "8")))
+INSTRUCTOR_AUTH_VERIFY_TLS = str(os.getenv("INSTRUCTOR_AUTH_VERIFY_TLS", "true")).strip().lower() not in {
+    "0", "false", "no", "off"
+}
 MAX_ROOM_ID_LENGTH = 100
 rooms = {}
 
@@ -27,6 +52,7 @@ class ClientState:
     pointer_target_client_id: str = "all"
     avatar_index: int = 0
     joined_at: int = 0
+    instructor_authorized: bool = False
 
 
 async def handle_connection(websocket):
@@ -105,31 +131,34 @@ async def handle_join(state, message):
     role = normalize_role(message.get("role"))
 
     if not room_id:
-        await send_json(state.websocket, {
-            "type": "error",
-            "message": "roomId is required."
-        })
+        await send_error(state.websocket, "roomId is required.", fatal=True)
         return
 
     if not role:
-        await send_json(state.websocket, {
-            "type": "error",
-            "message": "role must be instructor or student."
-        })
+        await send_error(state.websocket, "role must be instructor or student.", fatal=True)
         return
 
-    room = rooms.setdefault(room_id, {})
+    room = rooms.get(room_id, {})
     existing_instructor = find_instructor(room_id)
     if role == "instructor" and existing_instructor and existing_instructor.client_id != state.client_id:
-        await send_json(state.websocket, {
-            "type": "error",
-            "message": "This room already has an instructor connected."
-        })
+        await send_error(state.websocket, "This room already has an instructor connected.", fatal=True)
         return
+
+    instructor_authorized = False
+    if role == "instructor":
+        instructor_authorized, error_message = await verify_instructor_access(
+            room_id=room_id,
+            client_id=state.client_id,
+            password=message.get("instructorPassword")
+        )
+        if not instructor_authorized:
+            await send_error(state.websocket, error_message, fatal=True)
+            return
 
     if state.room_id:
         await remove_client(state, announce=False)
 
+    room = rooms.setdefault(room_id, {})
     state.room_id = room_id
     state.role = role
     state.current_context = normalize_context(message.get("currentContext"))
@@ -139,6 +168,7 @@ async def handle_join(state, message):
         if role == "instructor"
         else "all"
     )
+    state.instructor_authorized = instructor_authorized if role == "instructor" else False
     state.joined_at = current_millis()
     state.avatar_index = sum(1 for client in room.values() if client.role == "student") % 8
     room[state.client_id] = state
@@ -154,7 +184,8 @@ async def handle_join(state, message):
         "roomId": room_id,
         "features": {
             "desktopOverlay": True,
-            "toolEvent": True
+            "toolEvent": True,
+            "instructorAuth": bool(INSTRUCTOR_AUTH_URL)
         }
     })
     await broadcast_peer_status(room_id)
@@ -412,6 +443,7 @@ async def remove_client(state, announce=True):
     state.pointer_enabled = False
     state.pointer_target_client_id = "all"
     state.joined_at = 0
+    state.instructor_authorized = False
 
     if announce:
         await broadcast_peer_status(room_id)
@@ -425,6 +457,14 @@ async def send_json(websocket, payload):
         return
     except Exception as error:
         print(f"[send-error] {error}")
+
+
+async def send_error(websocket, message, fatal=False):
+    await send_json(websocket, {
+        "type": "error",
+        "message": str(message or "Server returned an error."),
+        "fatal": bool(fatal)
+    })
 
 
 def normalize_room_id(value):
@@ -531,6 +571,124 @@ def current_millis():
     return int(time.time() * 1000)
 
 
+async def verify_instructor_access(room_id, client_id, password):
+    password_text = str(password or "").strip()
+    if not password_text:
+        return False, "Enter the instructor password first."
+
+    if not INSTRUCTOR_AUTH_URL:
+        return False, (
+            "Instructor access is disabled until INSTRUCTOR_AUTH_URL "
+            "(or SPARVI_INSTRUCTOR_AUTH_URL) is configured on the server."
+        )
+
+    try:
+        return await asyncio.to_thread(
+            request_instructor_auth,
+            room_id,
+            client_id,
+            password_text
+        )
+    except Exception as error:
+        print(f"[auth-error] {error}")
+        return False, "Could not verify the instructor password right now."
+
+
+def request_instructor_auth(room_id, client_id, password):
+    payload = {
+        "password": password,
+        "roomId": room_id,
+        "clientId": client_id,
+        "role": "instructor",
+        "source": "sparvi-desktop",
+        "timestamp": current_millis()
+    }
+    encoded_payload = json.dumps(payload).encode("utf-8")
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "SparviDesktopServer/1.0"
+    }
+    if INSTRUCTOR_AUTH_BEARER_TOKEN:
+        headers["Authorization"] = f"Bearer {INSTRUCTOR_AUTH_BEARER_TOKEN}"
+        headers["X-Sparvi-Server-Secret"] = INSTRUCTOR_AUTH_BEARER_TOKEN
+        headers["X-Sparvi-Server-Shared-Secret"] = INSTRUCTOR_AUTH_BEARER_TOKEN
+        headers["X-Shared-Secret"] = INSTRUCTOR_AUTH_BEARER_TOKEN
+        headers["X-API-Key"] = INSTRUCTOR_AUTH_BEARER_TOKEN
+
+    request = urllib_request.Request(
+        INSTRUCTOR_AUTH_URL,
+        data=encoded_payload,
+        headers=headers,
+        method="POST"
+    )
+
+    ssl_context = None
+    if not INSTRUCTOR_AUTH_VERIFY_TLS:
+        ssl_context = ssl._create_unverified_context()
+
+    try:
+        with urllib_request.urlopen(
+            request,
+            timeout=INSTRUCTOR_AUTH_TIMEOUT_SECONDS,
+            context=ssl_context
+        ) as response:
+            response_body = response.read().decode("utf-8", errors="replace")
+            response_json = parse_auth_response_json(response_body)
+            if is_auth_allowed(response_json):
+                return True, ""
+
+            denial_message = extract_auth_message(response_json)
+            if denial_message:
+                return False, denial_message
+            return False, "Instructor password was rejected."
+    except urllib_error.HTTPError as error:
+        response_body = error.read().decode("utf-8", errors="replace")
+        response_snippet = " ".join(response_body.split())[:240]
+        print(f"[auth-http-error] status={error.code} body={response_snippet!r}")
+        response_json = parse_auth_response_json(response_body)
+        denial_message = extract_auth_message(response_json)
+        if denial_message:
+            return False, denial_message
+        if error.code in (401, 403):
+            return False, "Instructor password was rejected."
+        return False, f"Instructor auth endpoint returned HTTP {error.code}."
+    except urllib_error.URLError as error:
+        print(f"[auth-network-error] url={INSTRUCTOR_AUTH_URL!r} error={error}")
+        return False, "The instructor auth endpoint is unreachable right now."
+
+
+def parse_auth_response_json(raw_text):
+    try:
+        parsed = json.loads(raw_text or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def is_auth_allowed(response_json):
+    if not isinstance(response_json, dict):
+        return False
+
+    if any(bool(response_json.get(key)) for key in ("ok", "authorized", "allow", "valid")):
+        return True
+
+    status_text = str(response_json.get("status") or "").strip().lower()
+    return status_text in {"ok", "authorized", "allowed", "valid", "success"}
+
+
+def extract_auth_message(response_json):
+    if not isinstance(response_json, dict):
+        return ""
+
+    for key in ("message", "error", "detail", "reason"):
+        value = str(response_json.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def find_instructor(room_id):
     room = rooms.get(room_id, {})
     for client in room.values():
@@ -540,12 +698,20 @@ def find_instructor(room_id):
 
 
 def is_authorized_instructor(state):
-    return bool(state.room_id and state.role == "instructor")
+    return bool(state.room_id and state.role == "instructor" and state.instructor_authorized)
 
 
 async def main():
     print(f"[boot] Python {sys.version}")
     print(f"[boot] Sparvi Desktop server listening on ws://{HOST}:{PORT}")
+    print(
+        "[boot] Instructor auth endpoint: "
+        + (INSTRUCTOR_AUTH_URL if INSTRUCTOR_AUTH_URL else "disabled")
+    )
+    print(
+        "[boot] Instructor auth shared secret: "
+        + ("configured" if INSTRUCTOR_AUTH_BEARER_TOKEN else "not set")
+    )
 
     stop_event = asyncio.Event()
 
@@ -595,4 +761,3 @@ if __name__ == "__main__":
             raise
     except KeyboardInterrupt:
         print("\n[shutdown] Server stopped.")
-
