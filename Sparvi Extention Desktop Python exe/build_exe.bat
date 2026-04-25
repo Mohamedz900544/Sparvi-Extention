@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 set "DIST_DIR=dist"
 set "WORK_DIR=build"
-set "SPEC_DIR=."
+set "TEMP_ICON=%TEMP%\sparvi-desktop-pointer-build-icon.ico"
 
 echo [1/4] Installing client build dependencies...
 python -m pip install -r requirements-client.txt
@@ -23,22 +23,19 @@ if exist "dist\Sparvi Desktop Pointer.exe" (
 )
 if exist "%WORK_DIR%" rmdir /S /Q "%WORK_DIR%"
 if exist "%DIST_DIR%" rmdir /S /Q "%DIST_DIR%"
-if exist "Sparvi Desktop Pointer.spec" del /F /Q "Sparvi Desktop Pointer.spec"
+if exist "%TEMP_ICON%" del /F /Q "%TEMP_ICON%" >nul 2>&1
+if exist "icon.ico" del /F /Q "icon.ico" >nul 2>&1
 
-echo [4/4] Building Windows exe...
+echo [4/4] Building Windows exe from icon.png...
 python -m PyInstaller ^
   --noconfirm ^
   --clean ^
-  --windowed ^
-  --onefile ^
-  --add-data "logo.png;." ^
-  --add-data "icon.png;." ^
   --distpath "%DIST_DIR%" ^
   --workpath "%WORK_DIR%" ^
-  --specpath "%SPEC_DIR%" ^
-  --name "Sparvi Desktop Pointer" ^
-  client_app.py
+  "Sparvi Desktop Pointer.spec"
 if errorlevel 1 exit /b 1
+
+if exist "%TEMP_ICON%" del /F /Q "%TEMP_ICON%" >nul 2>&1
 
 echo.
 echo Build finished successfully.

@@ -132,7 +132,7 @@ class DesktopPointerWindow(QWidget):
         logo_pixmap = load_logo_pixmap()
         if not logo_pixmap.isNull():
             logo_label.setPixmap(
-                logo_pixmap.scaledToHeight(54, Qt.TransformationMode.SmoothTransformation)
+                logo_pixmap.scaledToHeight(42, Qt.TransformationMode.SmoothTransformation)
             )
 
         title_label = QLabel("Sparvi Desktop Pointer")
