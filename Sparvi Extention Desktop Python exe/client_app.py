@@ -28,7 +28,7 @@ from desktop_utils import (
 from mouse_capture import GlobalMouseCapture
 from network_client import NetworkClient
 from overlay_window import OverlayWindow
-from stage_controls_window import StageTargetWindow, StageToolWindow
+from stage_controls_window import StageTargetWindow, StageTextCastWindow, StageToolWindow
 from stage_window import InstructorStageWindow
 
 
@@ -71,6 +71,7 @@ class DesktopPointerWindow(QWidget):
         self.stage_window = InstructorStageWindow(self.settings)
         self.target_window = StageTargetWindow()
         self.tool_window = StageToolWindow()
+        self.text_cast_window = StageTextCastWindow()
         self.mouse_capture = GlobalMouseCapture(
             on_move=self.handle_global_mouse_move,
             on_click=self.handle_global_mouse_click
@@ -391,6 +392,7 @@ class DesktopPointerWindow(QWidget):
         self.target_window.target_selected.connect(self.handle_target_selected)
         self.tool_window.tool_selected.connect(self.handle_tool_selected)
         self.tool_window.clear_requested.connect(self.handle_clear_tools)
+        self.text_cast_window.text_submitted.connect(self.handle_text_cast_submitted)
 
     def load_settings(self):
         self.session_input.setText(self.settings.value("sessionId", ""))
@@ -452,6 +454,7 @@ class DesktopPointerWindow(QWidget):
         self.stage_window.set_stage_visible(False)
         self.target_window.hide()
         self.tool_window.hide()
+        self.text_cast_window.hide()
         self.update_mouse_capture_state()
         self.update_ui()
 
@@ -508,6 +511,7 @@ class DesktopPointerWindow(QWidget):
         self.stage_window.set_stage_active(False)
         self.target_window.hide()
         self.tool_window.hide()
+        self.text_cast_window.hide()
         self.update_mouse_capture_state()
         self.save_settings()
         self.update_ui()
@@ -526,6 +530,7 @@ class DesktopPointerWindow(QWidget):
             self.stage_window.set_stage_visible(False)
             self.target_window.hide()
             self.tool_window.hide()
+            self.text_cast_window.hide()
             if self.current_role() == "student":
                 self.overlay.set_teacher_pointer_enabled(False)
                 self.overlay.set_context_mismatch(False)
@@ -677,12 +682,24 @@ class DesktopPointerWindow(QWidget):
     def handle_tool_selected(self, tool_key):
         self.current_tool_mode = tool_key
         self.update_stage_controls()
+        if tool_key == "text_cast":
+            self.text_cast_window.show_and_focus()
         self.update_ui()
 
     def handle_clear_tools(self):
         self.hotspot_step_number = 1
         self.overlay.clear_teaching_artifacts()
         self.send_teaching_tool_event({"kind": "clear_tools"})
+
+    def handle_text_cast_submitted(self, text):
+        text_value = str(text or "").strip()
+        if not text_value:
+            return
+
+        self.send_teaching_tool_event({
+            "kind": "text_cast",
+            "text": text_value
+        })
 
     def handle_global_mouse_move(self, x, y):
         if not self.should_send_global_pointer():
@@ -744,6 +761,9 @@ class DesktopPointerWindow(QWidget):
             return
 
         if not pressed or not point:
+            return
+
+        if self.current_tool_mode == "text_cast":
             return
 
         if self.current_tool_mode == "highlight":
@@ -860,6 +880,7 @@ class DesktopPointerWindow(QWidget):
         if not visible:
             self.target_window.hide()
             self.tool_window.hide()
+            self.text_cast_window.hide()
             return
 
         students = self.peer_state.get("students", [])
@@ -870,6 +891,12 @@ class DesktopPointerWindow(QWidget):
         self.tool_window.set_selected_tool(self.current_tool_mode)
         self.tool_window.sync_to_stage(self.stage_window.stage_rect())
         self.tool_window.show()
+
+        if self.current_tool_mode == "text_cast":
+            self.text_cast_window.sync_to_stage(self.stage_window.stage_rect())
+            self.text_cast_window.show()
+        else:
+            self.text_cast_window.hide()
 
     def is_this_student_targeted(self, target_client_id):
         normalized = normalize_target(target_client_id)
@@ -959,6 +986,7 @@ class DesktopPointerWindow(QWidget):
         self.stage_window.close()
         self.target_window.close()
         self.tool_window.close()
+        self.text_cast_window.close()
         self.overlay.close()
         event.accept()
 

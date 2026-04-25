@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget
@@ -32,6 +33,7 @@ TOOLS = [
     ("highlight", "HL", "Highlight"),
     ("freeze", "Pin", "Freeze"),
     ("hotspot", "Step", "Hotspot"),
+    ("text_cast", "Text", "Text Cast"),
     ("clear", "Clear", "Clear")
 ]
 
@@ -254,3 +256,124 @@ class StageToolWindow(QWidget):
             button.setProperty("selected", "true" if key == tool_key else "false")
             button.style().unpolish(button)
             button.style().polish(button)
+
+
+class StageTextCastWindow(QWidget):
+    text_submitted = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        self._build_ui()
+        self.hide()
+
+    def _build_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setObjectName("StageTextCastWindow")
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame()
+        frame.setObjectName("StageTextCastFrame")
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        title = QLabel("Text Cast")
+        title.setObjectName("StageTextCastTitle")
+        layout.addWidget(title)
+
+        input_row = QHBoxLayout()
+        input_row.setSpacing(8)
+
+        self.text_input = QLineEdit()
+        self.text_input.setPlaceholderText("Send text to student")
+        self.text_input.setMaxLength(2000)
+        self.text_input.returnPressed.connect(self._emit_text)
+
+        self.send_button = QPushButton("Send")
+        self.send_button.setObjectName("TextCastSendButton")
+        self.send_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send_button.clicked.connect(self._emit_text)
+
+        input_row.addWidget(self.text_input, 1)
+        input_row.addWidget(self.send_button)
+        layout.addLayout(input_row)
+
+        outer.addWidget(frame)
+
+        self.setStyleSheet(
+            """
+            QFrame#StageTextCastFrame {
+                background: rgba(255, 255, 255, 250);
+                border: 1px solid #d7deea;
+                border-radius: 10px;
+            }
+            QLabel#StageTextCastTitle {
+                color: #0f172a;
+                font-size: 12px;
+                font-weight: 800;
+            }
+            QLineEdit {
+                min-width: 230px;
+                min-height: 34px;
+                padding: 0 10px;
+                border: 1px solid #cbd5e1;
+                border-radius: 7px;
+                background: #ffffff;
+                color: #172033;
+            }
+            QLineEdit:focus {
+                border-color: #2563eb;
+            }
+            QPushButton#TextCastSendButton {
+                min-width: 58px;
+                min-height: 34px;
+                border-radius: 7px;
+                border: 1px solid #1d4ed8;
+                background: #2563eb;
+                color: #ffffff;
+                font-weight: 800;
+            }
+            QPushButton#TextCastSendButton:hover {
+                background: #1d4ed8;
+            }
+            """
+        )
+
+    def sync_to_stage(self, stage_rect):
+        self.adjustSize()
+        desktop_rect = get_virtual_desktop_rect()
+        width = max(self.width(), self.sizeHint().width())
+        height = max(self.height(), self.sizeHint().height())
+
+        preferred_x = int(stage_rect["left"] + stage_rect["width"] + 84)
+        max_x = desktop_rect["left"] + desktop_rect["width"] - width - 12
+        if preferred_x > max_x:
+            preferred_x = int(stage_rect["left"] - width - 12)
+
+        min_x = desktop_rect["left"] + 12
+        x = min(max(preferred_x, min_x), max(min_x, max_x))
+
+        preferred_y = int(stage_rect["top"] + 8)
+        min_y = desktop_rect["top"] + 12
+        max_y = desktop_rect["top"] + desktop_rect["height"] - height - 12
+        y = min(max(preferred_y, min_y), max(min_y, max_y))
+        self.move(x, y)
+
+    def show_and_focus(self):
+        self.show()
+        self.raise_()
+        self.text_input.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _emit_text(self):
+        text = self.text_input.text().strip()
+        if not text:
+            return
+
+        self.text_submitted.emit(text)
+        self.text_input.clear()

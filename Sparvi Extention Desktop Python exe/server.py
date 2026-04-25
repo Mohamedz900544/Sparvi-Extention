@@ -38,6 +38,7 @@ INSTRUCTOR_AUTH_VERIFY_TLS = str(os.getenv("INSTRUCTOR_AUTH_VERIFY_TLS", "true")
     "0", "false", "no", "off"
 }
 MAX_ROOM_ID_LENGTH = 100
+MAX_TEXT_CAST_LENGTH = 2000
 rooms = {}
 
 
@@ -526,6 +527,7 @@ def normalize_tool_event(value):
         "highlight_element",
         "freeze_marker",
         "guided_hotspot",
+        "text_cast",
         "clear_tools"
     }:
         return None
@@ -563,6 +565,12 @@ def normalize_tool_event(value):
         except (TypeError, ValueError):
             step_number = 1
         event["stepNumber"] = max(1, min(step_number, 999))
+
+    if kind == "text_cast":
+        text = str(value.get("text") or "").strip()
+        if not text:
+            return None
+        event["text"] = text[:MAX_TEXT_CAST_LENGTH]
 
     return event
 

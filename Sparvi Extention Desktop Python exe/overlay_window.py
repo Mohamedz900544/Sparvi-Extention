@@ -2,10 +2,149 @@ import math
 import time
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QWidget
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from desktop_utils import denormalize_point, get_virtual_desktop_rect, shorten_label
+
+
+class TextCastPopupWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self._desktop_rect = get_virtual_desktop_rect()
+        self._build_ui()
+        self.hide()
+
+    def _build_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setWindowTitle("Sparvi Text Cast")
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame()
+        frame.setObjectName("TextCastPopupFrame")
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
+
+        header = QHBoxLayout()
+        header.setSpacing(8)
+
+        title = QLabel("Text Cast")
+        title.setObjectName("TextCastPopupTitle")
+        header.addWidget(title)
+        header.addStretch(1)
+
+        self.close_button = QPushButton("Close")
+        self.close_button.setObjectName("TextCastCloseButton")
+        self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.close_button.clicked.connect(self.hide)
+        header.addWidget(self.close_button)
+        layout.addLayout(header)
+
+        body = QHBoxLayout()
+        body.setSpacing(8)
+
+        self.text_field = QLineEdit()
+        self.text_field.setReadOnly(True)
+        self.text_field.setMinimumWidth(320)
+        self.text_field.setMaximumWidth(520)
+
+        self.copy_button = QPushButton("Copy")
+        self.copy_button.setObjectName("TextCastCopyButton")
+        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_button.clicked.connect(self._copy_text)
+
+        body.addWidget(self.text_field, 1)
+        body.addWidget(self.copy_button)
+        layout.addLayout(body)
+
+        outer.addWidget(frame)
+
+        self.setStyleSheet(
+            """
+            QFrame#TextCastPopupFrame {
+                background: rgba(255, 255, 255, 248);
+                border: 1px solid #cbd5e1;
+                border-radius: 10px;
+            }
+            QLabel#TextCastPopupTitle {
+                color: #0f172a;
+                font-size: 13px;
+                font-weight: 800;
+            }
+            QLineEdit {
+                min-height: 34px;
+                padding: 0 10px;
+                border: 1px solid #cbd5e1;
+                border-radius: 7px;
+                background: #f8fafc;
+                color: #111827;
+                font-size: 13px;
+            }
+            QPushButton {
+                min-height: 34px;
+                padding: 0 12px;
+                border-radius: 7px;
+                font-weight: 800;
+            }
+            QPushButton#TextCastCopyButton {
+                border: 1px solid #1d4ed8;
+                background: #2563eb;
+                color: #ffffff;
+            }
+            QPushButton#TextCastCopyButton:hover {
+                background: #1d4ed8;
+            }
+            QPushButton#TextCastCloseButton {
+                border: 1px solid #cbd5e1;
+                background: #ffffff;
+                color: #334155;
+            }
+            QPushButton#TextCastCloseButton:hover {
+                background: #f8fafc;
+            }
+            """
+        )
+
+    def show_text(self, text):
+        self.text_field.setText(str(text or ""))
+        self.copy_button.setText("Copy")
+        self._position_near_top()
+        self.show()
+        self.raise_()
+
+    def _copy_text(self):
+        text = self.text_field.text()
+        if not text:
+            return
+
+        QGuiApplication.clipboard().setText(text)
+        self.copy_button.setText("Copied")
+        QTimer.singleShot(1200, lambda: self.copy_button.setText("Copy"))
+
+    def _position_near_top(self):
+        self._desktop_rect = get_virtual_desktop_rect()
+        self.adjustSize()
+
+        width = max(self.width(), self.sizeHint().width())
+        height = max(self.height(), self.sizeHint().height())
+        left = self._desktop_rect["left"]
+        top = self._desktop_rect["top"]
+        desktop_width = self._desktop_rect["width"]
+        desktop_height = self._desktop_rect["height"]
+
+        x = left + max(12, int((desktop_width - width) / 2))
+        y = top + 24
+        max_x = left + desktop_width - width - 12
+        max_y = top + desktop_height - height - 12
+        self.move(min(max(x, left + 12), max(left + 12, max_x)), min(max(y, top + 12), max(top + 12, max_y)))
 
 
 class OverlayWindow(QWidget):
@@ -28,6 +167,7 @@ class OverlayWindow(QWidget):
         self._highlights = []
         self._mismatch_visible = False
         self._mismatch_message = "Teacher is on a different app or window"
+        self._text_popup = TextCastPopupWindow()
 
         self._configure_window()
         self._apply_geometry()
@@ -73,6 +213,8 @@ class OverlayWindow(QWidget):
         if next_rect != self._desktop_rect:
             self._desktop_rect = next_rect
             self._apply_geometry()
+            if self._text_popup.isVisible():
+                self._text_popup._position_near_top()
             self.update()
 
     def set_remote_pointer(self, x_ratio, y_ratio, label="Teacher"):
@@ -120,6 +262,8 @@ class OverlayWindow(QWidget):
             self._render_freeze_marker(event)
         elif kind == "guided_hotspot":
             self._render_hotspot(event)
+        elif kind == "text_cast":
+            self._render_text_cast(event)
         elif kind == "clear_tools":
             self.clear_teaching_artifacts()
 
@@ -129,6 +273,7 @@ class OverlayWindow(QWidget):
         self._freeze_markers = []
         self._hotspots = []
         self._highlights = []
+        self._text_popup.hide()
         self.update()
 
     def set_context_mismatch(self, mismatch, teacher_context=""):
@@ -458,6 +603,13 @@ class OverlayWindow(QWidget):
         })
         self.update()
 
+    def _render_text_cast(self, event):
+        text = str((event or {}).get("text") or "").strip()
+        if not text:
+            return
+
+        self._text_popup.show_text(text[:2000])
+
     def _ratios_to_local_point(self, x_ratio, y_ratio):
         point = denormalize_point(x_ratio, y_ratio, self._desktop_rect)
         if point is None:
@@ -480,3 +632,7 @@ class OverlayWindow(QWidget):
         if width < 8 or height < 8:
             return None
         return QRectF(left, top, width, height)
+
+    def closeEvent(self, event):
+        self._text_popup.close()
+        super().closeEvent(event)
