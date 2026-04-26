@@ -32,8 +32,8 @@ from stage_controls_window import StageTargetWindow, StageTextCastWindow, StageT
 from stage_window import InstructorStageWindow
 
 
-SEND_INTERVAL_SECONDS = 1 / 30
-TOOL_SEND_INTERVAL_SECONDS = 1 / 22
+SEND_INTERVAL_SECONDS = 1 / 45
+TOOL_SEND_INTERVAL_SECONDS = 1 / 30
 HARDCODED_SERVER_URL = "wss://sparvishare.alwaysdata.net"
 DRAW_TOOL_MODES = {"arrow", "circle", "underline"}
 TOOL_KIND_MAP = {

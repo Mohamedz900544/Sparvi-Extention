@@ -8,6 +8,9 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButto
 from desktop_utils import denormalize_point, get_virtual_desktop_rect, shorten_label
 
 
+POINTER_EASING = 0.55
+
+
 class TextCastPopupWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -302,8 +305,8 @@ class OverlayWindow(QWidget):
                 self._pointer_visible = False
                 needs_repaint = True
             else:
-                self._current_x += (self._target_x - self._current_x) * 0.28
-                self._current_y += (self._target_y - self._current_y) * 0.28
+                self._current_x += (self._target_x - self._current_x) * POINTER_EASING
+                self._current_y += (self._target_y - self._current_y) * POINTER_EASING
                 needs_repaint = True
 
         needs_repaint = self._prune_timed_items(now) or needs_repaint

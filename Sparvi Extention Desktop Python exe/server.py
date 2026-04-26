@@ -217,7 +217,6 @@ async def handle_cursor_move(state, message):
         "timestamp": int(message.get("timestamp") or current_millis())
     }
     await relay_to_target_students(state.room_id, state.pointer_target_client_id, payload)
-    await broadcast_context_mismatch(state.room_id)
 
 
 async def handle_click_pulse(state, message):
@@ -453,7 +452,7 @@ async def remove_client(state, announce=True):
 
 async def send_json(websocket, payload):
     try:
-        await websocket.send(json.dumps(payload))
+        await websocket.send(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     except websockets.ConnectionClosed:
         return
     except Exception as error:
@@ -742,7 +741,10 @@ async def main():
         HOST,
         PORT,
         ping_interval=20,
-        ping_timeout=20
+        ping_timeout=20,
+        compression=None,
+        max_queue=16,
+        write_limit=32768
     )
 
     print(f"[boot] Server started successfully, waiting for connections...")

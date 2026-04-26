@@ -1,14 +1,17 @@
+from collections import deque
 import json
+import socket
 import threading
 import time
 
 import websocket
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 
 MAX_RECONNECT_ATTEMPTS = 6
 BASE_RECONNECT_DELAY_SECONDS = 1
 MAX_RECONNECT_DELAY_SECONDS = 15
+MAX_CONTROL_QUEUE_SIZE = 120
 
 
 class NetworkClient(QObject):
@@ -30,8 +33,22 @@ class NetworkClient(QObject):
         self._reconnect_timer = None
         self._manual_disconnect = False
         self._send_lock = threading.Lock()
+        self._send_condition = threading.Condition()
+        self._send_queue = deque()
+        self._latest_cursor_payload = None
+        self._latest_laser_payload = None
         self._connected = False
         self._reconnect_attempt = 0
+        self._sender_thread = threading.Thread(
+            target=self._sender_loop,
+            daemon=True
+        )
+        self._sender_thread.start()
+        self._pending_cursor_message = None
+        self._cursor_message_lock = threading.Lock()
+        self._cursor_emit_timer = QTimer(self)
+        self._cursor_emit_timer.timeout.connect(self._flush_pending_cursor_message)
+        self._cursor_emit_timer.start(16)
 
         self._server_url = "ws://localhost:8790"
         self._room_id = ""
@@ -64,6 +81,8 @@ class NetworkClient(QObject):
 
         self._manual_disconnect = False
         self._reconnect_attempt = 0
+        self._clear_pending_sends()
+        self._clear_pending_cursor_message()
         self._open_socket(is_reconnect=False)
 
     def disconnect(self, clear_room=True):
@@ -85,6 +104,8 @@ class NetworkClient(QObject):
                 pass
 
         self._connected = False
+        self._clear_pending_sends()
+        self._clear_pending_cursor_message()
 
         if clear_room:
             self._room_id = ""
@@ -98,7 +119,7 @@ class NetworkClient(QObject):
     def send_cursor_move(self, x_ratio, y_ratio, current_context, target_client_id="all"):
         self._current_context = str(current_context or self._current_context).strip() or "Desktop"
         self._pointer_target_client_id = normalize_target(target_client_id)
-        self._safe_send({
+        self._queue_latest_cursor({
             "type": "cursor_move",
             "xRatio": x_ratio,
             "yRatio": y_ratio,
@@ -157,10 +178,13 @@ class NetworkClient(QObject):
             "targetClientId": normalize_target(event.get("targetClientId") or self._pointer_target_client_id),
             "timestamp": int(time.time() * 1000)
         }
-        return self._safe_send({
+        payload = {
             "type": "tool_event",
             "event": event_payload
-        })
+        }
+        if event_payload.get("kind") == "laser_point":
+            return self._queue_latest_laser(payload)
+        return self._safe_send(payload)
 
     def _open_socket(self, is_reconnect):
         self._clear_reconnect_timer()
@@ -192,7 +216,9 @@ class NetworkClient(QObject):
         try:
             socket_app.run_forever(
                 ping_interval=25,
-                ping_timeout=10
+                ping_timeout=10,
+                skip_utf8_validation=True,
+                sockopt=((socket.IPPROTO_TCP, socket.TCP_NODELAY, 1),)
             )
         except Exception as error:
             self.error_received.emit(f"Socket failed: {error}")
@@ -232,7 +258,7 @@ class NetworkClient(QObject):
             return
 
         if message_type == "cursor_move":
-            self.cursor_move_received.emit(message)
+            self._queue_cursor_message(message)
             return
 
         if message_type == "click_pulse":
@@ -268,6 +294,8 @@ class NetworkClient(QObject):
         socket_app = self._socket_app
         self._socket_app = None
         self._connected = False
+        self._notify_sender()
+        self._clear_pending_cursor_message()
 
         if socket_app is not None:
             try:
@@ -330,16 +358,105 @@ class NetworkClient(QObject):
 
     def _safe_send(self, payload, socket_app=None):
         app = socket_app or self._socket_app
+        if socket_app is not None:
+            return self._send_now(payload, socket_app, emit_errors=False)
+
         if app is None or not self._connected:
             return False
 
+        with self._send_condition:
+            self._send_queue.append(payload)
+            while len(self._send_queue) > MAX_CONTROL_QUEUE_SIZE:
+                self._send_queue.popleft()
+            self._send_condition.notify()
+        return True
+
+    def _queue_latest_cursor(self, payload):
+        if self._socket_app is None or not self._connected:
+            return False
+
+        with self._send_condition:
+            self._latest_cursor_payload = payload
+            self._send_condition.notify()
+        return True
+
+    def _queue_latest_laser(self, payload):
+        if self._socket_app is None or not self._connected:
+            return False
+
+        with self._send_condition:
+            self._latest_laser_payload = payload
+            self._send_condition.notify()
+        return True
+
+    def _sender_loop(self):
+        while True:
+            with self._send_condition:
+                while not self._has_send_work_locked():
+                    self._send_condition.wait(timeout=0.25)
+
+                app = self._socket_app
+                if self._send_queue:
+                    payload = self._send_queue.popleft()
+                elif self._latest_cursor_payload is not None:
+                    payload = self._latest_cursor_payload
+                    self._latest_cursor_payload = None
+                else:
+                    payload = self._latest_laser_payload
+                    self._latest_laser_payload = None
+
+            if app is None:
+                continue
+
+            self._send_now(payload, app)
+
+    def _has_send_work_locked(self):
+        return bool(
+            self._connected
+            and self._socket_app is not None
+            and (
+                self._send_queue
+                or self._latest_cursor_payload is not None
+                or self._latest_laser_payload is not None
+            )
+        )
+
+    def _send_now(self, payload, socket_app, emit_errors=True):
         with self._send_lock:
             try:
-                app.send(json.dumps(payload))
+                socket_app.send(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
                 return True
             except Exception as error:
-                self.error_received.emit(f"Failed to send message: {error}")
+                if emit_errors and self._connected and socket_app is self._socket_app:
+                    self.error_received.emit(f"Failed to send message: {error}")
                 return False
+
+    def _clear_pending_sends(self):
+        with self._send_condition:
+            self._send_queue.clear()
+            self._latest_cursor_payload = None
+            self._latest_laser_payload = None
+            self._send_condition.notify()
+
+    def _notify_sender(self):
+        with self._send_condition:
+            self._send_condition.notify()
+
+    def _queue_cursor_message(self, message):
+        with self._cursor_message_lock:
+            self._pending_cursor_message = message
+
+    def _flush_pending_cursor_message(self):
+        with self._cursor_message_lock:
+            message = self._pending_cursor_message
+            self._pending_cursor_message = None
+
+        if message is not None:
+            self.cursor_move_received.emit(message)
+
+    def _clear_pending_cursor_message(self):
+        with self._cursor_message_lock:
+            self._pending_cursor_message = None
 
     @property
     def supports_tool_events(self):
