@@ -1,0 +1,1651 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Sparvi Mobile Instructor Test</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f8;
+      --panel: #ffffff;
+      --panel-strong: #f8fafc;
+      --line: #d6dee9;
+      --line-strong: #9aa8bb;
+      --text: #111827;
+      --muted: #5f6f84;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --green: #0f766e;
+      --green-soft: #dcfce7;
+      --red: #b91c1c;
+      --red-soft: #fee2e2;
+      --amber: #b45309;
+      --amber-soft: #fef3c7;
+      --pink: #db2777;
+      --violet: #7c3aed;
+      --stage: #0f172a;
+      --shadow: 0 12px 34px rgba(15, 23, 42, 0.12);
+      --radius: 8px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      overscroll-behavior: none;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      touch-action: manipulation;
+    }
+
+    .app {
+      width: min(100%, 980px);
+      margin: 0 auto;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin: -1px -12px 12px;
+      padding: 10px 12px;
+      background: rgba(238, 243, 248, 0.94);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(214, 222, 233, 0.78);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 86px;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      border-color: rgba(15, 118, 110, 0.25);
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .badge.busy {
+      border-color: rgba(37, 99, 235, 0.25);
+      background: #dbeafe;
+      color: var(--primary-dark);
+    }
+
+    .badge.bad {
+      border-color: rgba(185, 28, 28, 0.24);
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .layout {
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+    }
+
+    .panel.pad {
+      padding: 12px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .panel-title h2 {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.2;
+      color: #0f172a;
+      letter-spacing: 0;
+    }
+
+    .mini {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid.two {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 11px;
+      outline: 0;
+    }
+
+    textarea {
+      min-height: 74px;
+      resize: vertical;
+      padding-top: 10px;
+      line-height: 1.35;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .button-row.three {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.primary {
+      border-color: var(--primary-dark);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn.primary.active {
+      border-color: #991b1b;
+      background: var(--red);
+    }
+
+    .btn.warn {
+      border-color: rgba(180, 83, 9, 0.3);
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .btn.danger {
+      border-color: rgba(185, 28, 28, 0.24);
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .btn:disabled {
+      background: #eef2f7;
+      border-color: #dce4ef;
+      color: #99a5b6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      min-height: 56px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      overflow: hidden;
+      margin-top: 4px;
+      color: #0f172a;
+      font-size: 13px;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .targets {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 4px;
+      scrollbar-width: none;
+    }
+
+    .targets::-webkit-scrollbar {
+      display: none;
+    }
+
+    .target {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      min-width: 48px;
+      height: 42px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background: #111827;
+      color: #fff;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .target.active {
+      border-color: #facc15;
+      box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.24);
+    }
+
+    .stage-wrap {
+      overflow: hidden;
+      background: var(--stage);
+      border: 1px solid #1e293b;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stage-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 38px;
+      padding: 7px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      background: #111827;
+      color: #e5e7eb;
+    }
+
+    .stage-head strong {
+      min-width: 0;
+      overflow: hidden;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .coords {
+      color: #b9c5d7;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    #stage {
+      position: relative;
+      height: min(58vh, 540px);
+      min-height: 330px;
+      background:
+        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        radial-gradient(circle at 18% 22%, rgba(37, 99, 235, 0.18), transparent 25%),
+        radial-gradient(circle at 86% 72%, rgba(15, 118, 110, 0.16), transparent 26%),
+        #0f172a;
+      background-size: 28px 28px, 28px 28px, auto, auto, auto;
+      cursor: crosshair;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .stage-hint {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: rgba(226, 232, 240, 0.65);
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .pointer-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 17px;
+      height: 17px;
+      border: 3px solid #fff;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2), 0 10px 25px rgba(0, 0, 0, 0.28);
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      transition: opacity 120ms ease;
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    .pointer-dot.show {
+      opacity: 1;
+    }
+
+    .artifact-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    .stage-mark {
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 3px solid #facc15;
+      background: rgba(250, 204, 21, 0.14);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .stage-mark.freeze {
+      border-color: #60a5fa;
+      background: rgba(96, 165, 250, 0.15);
+    }
+
+    .stage-mark.hotspot {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-color: #22c55e;
+      background: #16a34a;
+      color: #fff;
+      font-weight: 900;
+    }
+
+    .stage-mark.text-cast {
+      width: auto;
+      max-width: min(280px, 78%);
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(15, 23, 42, 0.92);
+      color: #f8fafc;
+      padding: 9px 11px;
+      font-size: 13px;
+      line-height: 1.35;
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+    }
+
+    .pulse {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      border: 3px solid #f97316;
+      border-radius: 999px;
+      transform: translate(-50%, -50%) scale(0.45);
+      animation: pulse 620ms ease-out forwards;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    @keyframes pulse {
+      to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(2.7);
+      }
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .tool {
+      min-width: 0;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: #1f2937;
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .tool.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .text-cast-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .message {
+      display: none;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .message.show {
+      display: block;
+    }
+
+    .message.error {
+      border: 1px solid rgba(185, 28, 28, 0.24);
+      background: var(--red-soft);
+      color: var(--red);
+    }
+
+    .message.info {
+      border: 1px solid rgba(37, 99, 235, 0.2);
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .log {
+      max-height: 136px;
+      overflow: auto;
+      margin: 0;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #101827;
+      color: #dbeafe;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .desktop-only {
+      display: none;
+    }
+
+    @media (min-width: 860px) {
+      .app {
+        padding-top: 18px;
+      }
+
+      .topbar {
+        margin-inline: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+
+      .layout {
+        grid-template-columns: 340px minmax(0, 1fr);
+        align-items: start;
+      }
+
+      .side {
+        position: sticky;
+        top: 86px;
+      }
+
+      #stage {
+        height: 620px;
+      }
+
+      .desktop-only {
+        display: inline;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .app {
+        padding-inline: 8px;
+      }
+
+      .topbar {
+        margin-inline: -8px;
+      }
+
+      .tool-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .button-row.three {
+        grid-template-columns: 1fr;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="topbar" aria-label="Status">
+      <div class="brand-row">
+        <div class="brand">
+          <h1>Sparvi Mobile Instructor</h1>
+          <p>Python desktop protocol tester</p>
+        </div>
+        <div id="connectionBadge" class="badge">Offline</div>
+      </div>
+    </section>
+
+    <div class="layout">
+      <div class="side grid">
+        <section class="panel pad" aria-label="Session setup">
+          <div class="panel-title">
+            <h2>Session</h2>
+            <span id="featureStatus" class="mini">toolEvent: unknown</span>
+          </div>
+
+          <div class="grid">
+            <label>
+              Server URL
+              <input id="serverUrl" inputmode="url" autocomplete="off" spellcheck="false" value="wss://sparvishare.alwaysdata.net">
+            </label>
+
+            <div class="grid two">
+              <label>
+                Room ID
+                <input id="roomId" autocomplete="off" spellcheck="false" placeholder="class-demo-1">
+              </label>
+              <label>
+                Context
+                <input id="contextName" autocomplete="off" spellcheck="false" value="Mobile Instructor Test">
+              </label>
+            </div>
+
+            <label>
+              Instructor Password
+              <input id="password" type="password" autocomplete="current-password" placeholder="Required by Python server">
+            </label>
+
+            <div class="button-row">
+              <button id="connectBtn" class="btn primary" type="button">Connect</button>
+              <button id="disconnectBtn" class="btn" type="button" disabled>Disconnect</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel pad" aria-label="Live controls">
+          <div class="panel-title">
+            <h2>Live Pointer</h2>
+            <span id="pointerStatus" class="mini">stopped</span>
+          </div>
+
+          <div class="button-row">
+            <button id="pointerBtn" class="btn primary" type="button" disabled>Start</button>
+            <button id="pulseBtn" class="btn warn" type="button" disabled>Pulse</button>
+          </div>
+        </section>
+
+        <section class="panel pad" aria-label="Targets">
+          <div class="panel-title">
+            <h2>Targets</h2>
+            <span id="studentCount" class="mini">0 students</span>
+          </div>
+          <div id="targets" class="targets"></div>
+        </section>
+
+        <section class="panel pad" aria-label="Tools">
+          <div class="panel-title">
+            <h2>Tools</h2>
+            <span id="selectedToolLabel" class="mini">pointer</span>
+          </div>
+          <div id="tools" class="tool-grid"></div>
+        </section>
+
+        <section class="panel pad" aria-label="Text cast">
+          <div class="panel-title">
+            <h2>Text Cast</h2>
+            <span class="mini">max 2000</span>
+          </div>
+          <div class="text-cast-row">
+            <input id="textCast" maxlength="2000" placeholder="Send text to student">
+            <button id="textCastBtn" class="btn primary" type="button" disabled>Send</button>
+          </div>
+        </section>
+
+        <section class="panel pad" aria-label="Connection status">
+          <div class="panel-title">
+            <h2>Room State</h2>
+            <span id="clientShortId" class="mini">no client</span>
+          </div>
+          <div class="status-grid">
+            <div class="stat">
+              <span>Connection</span>
+              <strong id="connectionValue">Disconnected</strong>
+            </div>
+            <div class="stat">
+              <span>Target</span>
+              <strong id="targetValue">All</strong>
+            </div>
+            <div class="stat">
+              <span>Instructor</span>
+              <strong id="instructorValue">Not joined</strong>
+            </div>
+            <div class="stat">
+              <span>Pointer</span>
+              <strong id="pointerValue">Off</strong>
+            </div>
+          </div>
+        </section>
+
+        <div id="message" class="message" role="status"></div>
+
+        <section class="panel pad" aria-label="Log">
+          <div class="panel-title">
+            <h2>Event Log</h2>
+            <button id="clearLogBtn" class="btn" type="button">Clear</button>
+          </div>
+          <pre id="log" class="log"></pre>
+        </section>
+      </div>
+
+      <section class="stage-wrap" aria-label="Teaching stage">
+        <div class="stage-head">
+          <strong id="stageTitle">Touch Stage <span class="desktop-only">- normalized desktop ratios</span></strong>
+          <span id="coords" class="coords">x 0.500 / y 0.500</span>
+        </div>
+        <div id="stage">
+          <svg id="artifactSvg" class="artifact-layer" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#facc15"></path>
+              </marker>
+            </defs>
+          </svg>
+          <div id="stageHint" class="stage-hint">Connect, start Live Pointer, then touch or drag here.</div>
+          <div id="pointerDot" class="pointer-dot"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const DEFAULT_SERVER_URL = "wss://sparvishare.alwaysdata.net";
+      const STORAGE_KEY = "sparviMobileInstructorTest";
+      const CURSOR_INTERVAL_MS = 22;
+      const LASER_INTERVAL_MS = 34;
+      const TOOLS = [
+        { key: "pointer", label: "Ptr" },
+        { key: "laser", label: "Laser" },
+        { key: "arrow", label: "Arrow" },
+        { key: "circle", label: "Circle" },
+        { key: "underline", label: "Line" },
+        { key: "highlight", label: "HL" },
+        { key: "freeze", label: "Pin" },
+        { key: "hotspot", label: "Step" },
+        { key: "text_cast", label: "Text" },
+        { key: "clear", label: "Clear" }
+      ];
+      const DRAW_KIND_BY_TOOL = {
+        arrow: "draw_arrow",
+        circle: "draw_circle",
+        underline: "draw_underline"
+      };
+      const AVATAR_COLORS = [
+        "#2563eb",
+        "#db2777",
+        "#16a34a",
+        "#9333ea",
+        "#ea580c",
+        "#0891b2",
+        "#4f46e5",
+        "#be123c",
+        "#111827"
+      ];
+
+      const $ = (id) => document.getElementById(id);
+      const els = {
+        serverUrl: $("serverUrl"),
+        roomId: $("roomId"),
+        contextName: $("contextName"),
+        password: $("password"),
+        connectBtn: $("connectBtn"),
+        disconnectBtn: $("disconnectBtn"),
+        pointerBtn: $("pointerBtn"),
+        pulseBtn: $("pulseBtn"),
+        targets: $("targets"),
+        tools: $("tools"),
+        textCast: $("textCast"),
+        textCastBtn: $("textCastBtn"),
+        stage: $("stage"),
+        artifactSvg: $("artifactSvg"),
+        stageHint: $("stageHint"),
+        pointerDot: $("pointerDot"),
+        coords: $("coords"),
+        connectionBadge: $("connectionBadge"),
+        featureStatus: $("featureStatus"),
+        pointerStatus: $("pointerStatus"),
+        selectedToolLabel: $("selectedToolLabel"),
+        studentCount: $("studentCount"),
+        clientShortId: $("clientShortId"),
+        connectionValue: $("connectionValue"),
+        targetValue: $("targetValue"),
+        instructorValue: $("instructorValue"),
+        pointerValue: $("pointerValue"),
+        message: $("message"),
+        log: $("log"),
+        clearLogBtn: $("clearLogBtn")
+      };
+
+      const state = {
+        socket: null,
+        connection: "disconnected",
+        clientId: "",
+        features: { toolEvent: false },
+        pointerEnabled: false,
+        targetClientId: "all",
+        selectedTool: "pointer",
+        students: [],
+        instructorConnected: false,
+        hotspotStep: 1,
+        currentPoint: { xRatio: 0.5, yRatio: 0.5 },
+        activePointerId: null,
+        draw: null,
+        lastCursorSentAt: 0,
+        lastLaserSentAt: 0
+      };
+
+      function now() {
+        return Date.now();
+      }
+
+      function clampRatio(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric)) {
+          return 0;
+        }
+        return Math.max(0, Math.min(1, numeric));
+      }
+
+      function shortId(value) {
+        const text = String(value || "");
+        return text ? text.slice(0, 8) : "";
+      }
+
+      function normalizeTarget(value) {
+        const text = String(value || "").trim();
+        return text || "all";
+      }
+
+      function contextName() {
+        return String(els.contextName.value || "Mobile Instructor Test").trim() || "Mobile Instructor Test";
+      }
+
+      function isOpen() {
+        return state.socket && state.socket.readyState === WebSocket.OPEN;
+      }
+
+      function canSendInstructorEvents() {
+        return isOpen() && state.connection === "connected";
+      }
+
+      function savePrefs() {
+        const prefs = {
+          serverUrl: els.serverUrl.value.trim(),
+          roomId: els.roomId.value.trim(),
+          contextName: els.contextName.value.trim()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+      }
+
+      function loadPrefs() {
+        try {
+          const prefs = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+          els.serverUrl.value = prefs.serverUrl || DEFAULT_SERVER_URL;
+          els.roomId.value = prefs.roomId || "";
+          els.contextName.value = prefs.contextName || "Mobile Instructor Test";
+        } catch (_) {
+          els.serverUrl.value = DEFAULT_SERVER_URL;
+        }
+      }
+
+      function showMessage(text, tone) {
+        const message = String(text || "").trim();
+        els.message.textContent = message;
+        els.message.className = "message";
+        if (message) {
+          els.message.classList.add("show", tone === "error" ? "error" : "info");
+        }
+      }
+
+      function logLine(text) {
+        const time = new Date().toLocaleTimeString();
+        const next = `[${time}] ${text}\n` + els.log.textContent;
+        els.log.textContent = next.slice(0, 6000);
+      }
+
+      function send(payload) {
+        if (!isOpen()) {
+          return false;
+        }
+        state.socket.send(JSON.stringify(payload));
+        return true;
+      }
+
+      function setConnection(next) {
+        state.connection = next;
+        render();
+      }
+
+      function connect() {
+        const serverUrl = els.serverUrl.value.trim() || DEFAULT_SERVER_URL;
+        const roomId = els.roomId.value.trim();
+        const password = els.password.value.trim();
+
+        if (!roomId) {
+          showMessage("Room ID is required.", "error");
+          return;
+        }
+
+        if (!password) {
+          showMessage("Instructor password is required by the Python server.", "error");
+          return;
+        }
+
+        disconnect(false);
+        savePrefs();
+        showMessage("", "info");
+        setConnection("connecting");
+        logLine(`Connecting to ${serverUrl}`);
+
+        try {
+          state.socket = new WebSocket(serverUrl);
+        } catch (error) {
+          showMessage(`Invalid WebSocket URL: ${error.message}`, "error");
+          setConnection("disconnected");
+          return;
+        }
+
+        state.socket.addEventListener("open", () => {
+          setConnection("connected");
+          logLine("Socket opened");
+          send({
+            type: "join",
+            roomId,
+            role: "instructor",
+            instructorPassword: password,
+            currentContext: contextName(),
+            pointerEnabled: state.pointerEnabled,
+            targetClientId: state.targetClientId
+          });
+        });
+
+        state.socket.addEventListener("message", (event) => {
+          handleMessage(event.data);
+        });
+
+        state.socket.addEventListener("error", () => {
+          showMessage("WebSocket connection error. Check the server URL and network.", "error");
+          logLine("Socket error");
+        });
+
+        state.socket.addEventListener("close", (event) => {
+          const reason = event.reason ? `: ${event.reason}` : "";
+          logLine(`Socket closed ${event.code || ""}${reason}`);
+          state.socket = null;
+          state.pointerEnabled = false;
+          if (state.connection !== "disconnected") {
+            setConnection("disconnected");
+          }
+        });
+      }
+
+      function disconnect(announce = true) {
+        if (state.socket) {
+          if (announce && isOpen()) {
+            send({ type: "leave" });
+          }
+          state.socket.close();
+        }
+        state.socket = null;
+        state.connection = "disconnected";
+        state.clientId = "";
+        state.features = { toolEvent: false };
+        state.pointerEnabled = false;
+        state.targetClientId = "all";
+        state.students = [];
+        state.instructorConnected = false;
+        render();
+      }
+
+      function handleMessage(raw) {
+        let message;
+        try {
+          message = JSON.parse(raw);
+        } catch (_) {
+          logLine("Received malformed server message");
+          return;
+        }
+
+        switch (message.type) {
+          case "joined":
+            state.clientId = message.clientId || "";
+            state.features = { toolEvent: Boolean(message.features && message.features.toolEvent) };
+            showMessage("Instructor joined. Start Live Pointer to test desktop students.", "info");
+            logLine(`Joined room ${message.roomId || ""} as ${shortId(state.clientId)}`);
+            break;
+          case "peer_status":
+            state.instructorConnected = Boolean(message.instructorConnected);
+            state.pointerEnabled = Boolean(message.pointerEnabled);
+            state.targetClientId = normalizeTarget(message.pointerTargetClientId || state.targetClientId);
+            state.students = Array.isArray(message.students) ? message.students : [];
+            if (state.targetClientId !== "all" && !state.students.some((student) => student.clientId === state.targetClientId)) {
+              state.targetClientId = "all";
+            }
+            break;
+          case "pointer_state":
+            state.pointerEnabled = Boolean(message.enabled);
+            state.targetClientId = normalizeTarget(message.targetClientId || state.targetClientId);
+            logLine(`Pointer ${state.pointerEnabled ? "enabled" : "disabled"}`);
+            break;
+          case "pointer_target":
+            state.targetClientId = normalizeTarget(message.targetClientId);
+            logLine(`Target ${targetLabel(state.targetClientId)}`);
+            break;
+          case "context_mismatch":
+            if (message.mismatch) {
+              logLine(`Context mismatch: instructor=${message.instructorContext || ""}`);
+            }
+            break;
+          case "error":
+            showMessage(message.message || "Server returned an error.", "error");
+            logLine(`Error: ${message.message || "unknown"}`);
+            if (message.fatal) {
+              disconnect(false);
+            }
+            break;
+          case "pong":
+            break;
+          default:
+            logLine(`Server: ${message.type || "unknown"}`);
+            break;
+        }
+
+        render();
+      }
+
+      function togglePointer() {
+        if (!canSendInstructorEvents()) {
+          return;
+        }
+        state.pointerEnabled = !state.pointerEnabled;
+        send({
+          type: "pointer_state",
+          enabled: state.pointerEnabled,
+          currentContext: contextName(),
+          targetClientId: state.targetClientId
+        });
+        logLine(`Sent pointer_state ${state.pointerEnabled ? "on" : "off"}`);
+        render();
+      }
+
+      function chooseTarget(targetClientId) {
+        state.targetClientId = normalizeTarget(targetClientId);
+        if (canSendInstructorEvents()) {
+          send({
+            type: "pointer_target",
+            targetClientId: state.targetClientId
+          });
+        }
+        render();
+      }
+
+      function selectTool(toolKey) {
+        if (toolKey === "clear") {
+          clearTools();
+          return;
+        }
+        state.selectedTool = toolKey;
+        render();
+      }
+
+      function sendContextUpdate() {
+        if (!canSendInstructorEvents()) {
+          return;
+        }
+        send({
+          type: "context_update",
+          currentContext: contextName()
+        });
+      }
+
+      function sendCursor(point, force = false) {
+        if (!state.pointerEnabled || !canSendInstructorEvents()) {
+          return;
+        }
+        const timestamp = now();
+        if (!force && timestamp - state.lastCursorSentAt < CURSOR_INTERVAL_MS) {
+          return;
+        }
+        state.lastCursorSentAt = timestamp;
+        send({
+          type: "cursor_move",
+          xRatio: point.xRatio,
+          yRatio: point.yRatio,
+          currentContext: contextName(),
+          targetClientId: state.targetClientId,
+          timestamp
+        });
+      }
+
+      function sendPulse(point = state.currentPoint) {
+        if (!canSendInstructorEvents()) {
+          return;
+        }
+        send({
+          type: "click_pulse",
+          xRatio: point.xRatio,
+          yRatio: point.yRatio,
+          currentContext: contextName(),
+          targetClientId: state.targetClientId,
+          timestamp: now()
+        });
+        addPulse(point);
+        logLine(`Pulse ${formatPoint(point)}`);
+      }
+
+      function sendToolEvent(event) {
+        if (!canSendInstructorEvents()) {
+          return false;
+        }
+        if (!state.features.toolEvent) {
+          showMessage("This server did not advertise toolEvent support.", "error");
+          return false;
+        }
+        const payload = {
+          ...event,
+          id: event.id || `mobile-${now()}-${Math.random().toString(16).slice(2)}`,
+          currentContext: contextName(),
+          targetClientId: state.targetClientId,
+          timestamp: now()
+        };
+        send({
+          type: "tool_event",
+          event: payload
+        });
+        return true;
+      }
+
+      function sendPointTool(kind, point) {
+        const event = {
+          kind,
+          xRatio: point.xRatio,
+          yRatio: point.yRatio
+        };
+        if (kind === "guided_hotspot") {
+          event.stepNumber = state.hotspotStep;
+        }
+        if (sendToolEvent(event)) {
+          renderLocalTool(event);
+          if (kind === "guided_hotspot") {
+            state.hotspotStep += 1;
+          }
+          logLine(`${kind} ${formatPoint(point)}`);
+        }
+      }
+
+      function sendDrawTool(kind, start, end) {
+        const event = {
+          kind,
+          x1Ratio: start.xRatio,
+          y1Ratio: start.yRatio,
+          x2Ratio: end.xRatio,
+          y2Ratio: end.yRatio
+        };
+        if (sendToolEvent(event)) {
+          renderLocalTool(event);
+          logLine(`${kind} ${formatPoint(start)} -> ${formatPoint(end)}`);
+        }
+      }
+
+      function sendTextCast() {
+        const text = els.textCast.value.trim();
+        if (!text) {
+          return;
+        }
+        const event = {
+          kind: "text_cast",
+          text
+        };
+        if (sendToolEvent(event)) {
+          renderLocalTool(event);
+          els.textCast.value = "";
+          logLine("text_cast sent");
+        }
+      }
+
+      function clearTools() {
+        state.hotspotStep = 1;
+        clearLocalArtifacts();
+        sendToolEvent({ kind: "clear_tools" });
+        logLine("clear_tools sent");
+      }
+
+      function stagePointFromEvent(event) {
+        const rect = els.stage.getBoundingClientRect();
+        const x = clampRatio((event.clientX - rect.left) / rect.width);
+        const y = clampRatio((event.clientY - rect.top) / rect.height);
+        return { xRatio: x, yRatio: y };
+      }
+
+      function setCurrentPoint(point) {
+        state.currentPoint = {
+          xRatio: clampRatio(point.xRatio),
+          yRatio: clampRatio(point.yRatio)
+        };
+        els.pointerDot.style.left = `${state.currentPoint.xRatio * 100}%`;
+        els.pointerDot.style.top = `${state.currentPoint.yRatio * 100}%`;
+        els.pointerDot.classList.add("show");
+        els.coords.textContent = `x ${state.currentPoint.xRatio.toFixed(3)} / y ${state.currentPoint.yRatio.toFixed(3)}`;
+      }
+
+      function handleStagePointerDown(event) {
+        if (!state.pointerEnabled) {
+          return;
+        }
+        event.preventDefault();
+        els.stage.setPointerCapture(event.pointerId);
+        state.activePointerId = event.pointerId;
+
+        const point = stagePointFromEvent(event);
+        setCurrentPoint(point);
+        sendCursor(point, true);
+
+        if (DRAW_KIND_BY_TOOL[state.selectedTool]) {
+          state.draw = {
+            tool: state.selectedTool,
+            start: point,
+            end: point,
+            moved: false,
+            previewId: `preview-${now()}`
+          };
+          updateDrawPreview();
+          return;
+        }
+
+        if (state.selectedTool === "highlight") {
+          sendPointTool("highlight_element", point);
+        } else if (state.selectedTool === "freeze") {
+          sendPointTool("freeze_marker", point);
+        } else if (state.selectedTool === "hotspot") {
+          sendPointTool("guided_hotspot", point);
+        } else if (state.selectedTool === "text_cast") {
+          els.textCast.focus();
+        } else if (state.selectedTool === "laser") {
+          sendPointTool("laser_point", point);
+        }
+      }
+
+      function handleStagePointerMove(event) {
+        if (!state.pointerEnabled || state.activePointerId !== event.pointerId) {
+          return;
+        }
+        event.preventDefault();
+        const point = stagePointFromEvent(event);
+        setCurrentPoint(point);
+        sendCursor(point);
+
+        if (state.draw) {
+          const dx = Math.abs(point.xRatio - state.draw.start.xRatio);
+          const dy = Math.abs(point.yRatio - state.draw.start.yRatio);
+          state.draw.end = point;
+          state.draw.moved = state.draw.moved || dx > 0.01 || dy > 0.01;
+          updateDrawPreview();
+          return;
+        }
+
+        if (state.selectedTool === "laser") {
+          const timestamp = now();
+          if (timestamp - state.lastLaserSentAt >= LASER_INTERVAL_MS) {
+            state.lastLaserSentAt = timestamp;
+            const eventPayload = {
+              kind: "laser_point",
+              xRatio: point.xRatio,
+              yRatio: point.yRatio
+            };
+            if (sendToolEvent(eventPayload)) {
+              renderLaser(point);
+            }
+          }
+        }
+      }
+
+      function handleStagePointerUp(event) {
+        if (state.activePointerId !== event.pointerId) {
+          return;
+        }
+        event.preventDefault();
+        const point = stagePointFromEvent(event);
+        setCurrentPoint(point);
+        sendCursor(point, true);
+
+        if (state.draw) {
+          const draw = state.draw;
+          state.draw = null;
+          removePreview();
+          if (draw.moved) {
+            sendDrawTool(DRAW_KIND_BY_TOOL[draw.tool], draw.start, point);
+          }
+        } else if (state.selectedTool === "pointer") {
+          sendPulse(point);
+        }
+
+        state.activePointerId = null;
+      }
+
+      function handleStagePointerCancel(event) {
+        if (state.activePointerId === event.pointerId) {
+          state.activePointerId = null;
+          state.draw = null;
+          removePreview();
+        }
+      }
+
+      function targetLabel(targetClientId) {
+        if (normalizeTarget(targetClientId) === "all") {
+          return "All";
+        }
+        const student = state.students.find((item) => item.clientId === targetClientId);
+        return student ? (student.displayName || shortId(targetClientId)) : shortId(targetClientId);
+      }
+
+      function formatPoint(point) {
+        return `${point.xRatio.toFixed(3)},${point.yRatio.toFixed(3)}`;
+      }
+
+      function xy(point) {
+        return {
+          x: clampRatio(point.xRatio) * 1000,
+          y: clampRatio(point.yRatio) * 1000
+        };
+      }
+
+      function svgNode(name, attrs) {
+        const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+        for (const [key, value] of Object.entries(attrs || {})) {
+          node.setAttribute(key, value);
+        }
+        return node;
+      }
+
+      function addSvgArtifact(node) {
+        els.artifactSvg.appendChild(node);
+      }
+
+      function updateDrawPreview() {
+        removePreview();
+        if (!state.draw) {
+          return;
+        }
+        const node = createDrawNode(DRAW_KIND_BY_TOOL[state.draw.tool], state.draw.start, state.draw.end, true);
+        node.setAttribute("data-preview", "true");
+        addSvgArtifact(node);
+      }
+
+      function removePreview() {
+        els.artifactSvg.querySelectorAll("[data-preview='true']").forEach((node) => node.remove());
+      }
+
+      function createDrawNode(kind, start, end, preview = false) {
+        const a = xy(start);
+        const b = xy(end);
+        const opacity = preview ? "0.6" : "0.95";
+
+        if (kind === "draw_circle") {
+          const cx = (a.x + b.x) / 2;
+          const cy = (a.y + b.y) / 2;
+          const rx = Math.max(18, Math.abs(b.x - a.x) / 2);
+          const ry = Math.max(18, Math.abs(b.y - a.y) / 2);
+          return svgNode("ellipse", {
+            cx,
+            cy,
+            rx,
+            ry,
+            fill: "rgba(250,204,21,0.10)",
+            stroke: "#facc15",
+            "stroke-width": "10",
+            opacity
+          });
+        }
+
+        return svgNode("line", {
+          x1: a.x,
+          y1: a.y,
+          x2: b.x,
+          y2: b.y,
+          stroke: kind === "draw_underline" ? "#38bdf8" : "#facc15",
+          "stroke-width": kind === "draw_underline" ? "11" : "9",
+          "stroke-linecap": "round",
+          "marker-end": kind === "draw_arrow" ? "url(#arrowHead)" : "",
+          opacity
+        });
+      }
+
+      function renderLocalTool(event) {
+        if (event.kind === "clear_tools") {
+          clearLocalArtifacts();
+          return;
+        }
+
+        if (event.kind === "laser_point") {
+          renderLaser(event);
+          return;
+        }
+
+        if (event.kind === "draw_arrow" || event.kind === "draw_circle" || event.kind === "draw_underline") {
+          addSvgArtifact(createDrawNode(
+            event.kind,
+            { xRatio: event.x1Ratio, yRatio: event.y1Ratio },
+            { xRatio: event.x2Ratio, yRatio: event.y2Ratio }
+          ));
+          return;
+        }
+
+        if (event.kind === "highlight_element") {
+          addStageMark(event, "highlight", "");
+          return;
+        }
+
+        if (event.kind === "freeze_marker") {
+          addStageMark(event, "freeze", "");
+          return;
+        }
+
+        if (event.kind === "guided_hotspot") {
+          addStageMark(event, "hotspot", String(event.stepNumber || state.hotspotStep));
+          return;
+        }
+
+        if (event.kind === "text_cast") {
+          const mark = document.createElement("div");
+          mark.className = "stage-mark text-cast";
+          mark.textContent = event.text || "";
+          mark.style.left = `${state.currentPoint.xRatio * 100}%`;
+          mark.style.top = `${state.currentPoint.yRatio * 100}%`;
+          els.stage.appendChild(mark);
+        }
+      }
+
+      function addStageMark(point, className, text) {
+        const mark = document.createElement("div");
+        mark.className = `stage-mark ${className}`;
+        mark.textContent = text || "";
+        mark.style.left = `${clampRatio(point.xRatio) * 100}%`;
+        mark.style.top = `${clampRatio(point.yRatio) * 100}%`;
+        els.stage.appendChild(mark);
+      }
+
+      function renderLaser(point) {
+        const a = xy(point);
+        const dot = svgNode("circle", {
+          cx: a.x,
+          cy: a.y,
+          r: "18",
+          fill: "#ef4444",
+          opacity: "0.72"
+        });
+        dot.setAttribute("data-laser", String(now()));
+        addSvgArtifact(dot);
+        window.setTimeout(() => dot.remove(), 850);
+      }
+
+      function addPulse(point) {
+        const pulse = document.createElement("div");
+        pulse.className = "pulse";
+        pulse.style.left = `${clampRatio(point.xRatio) * 100}%`;
+        pulse.style.top = `${clampRatio(point.yRatio) * 100}%`;
+        els.stage.appendChild(pulse);
+        window.setTimeout(() => pulse.remove(), 700);
+      }
+
+      function clearLocalArtifacts() {
+        removePreview();
+        els.artifactSvg.querySelectorAll(":scope > *:not(defs)").forEach((node) => node.remove());
+        els.stage.querySelectorAll(".stage-mark, .pulse").forEach((node) => node.remove());
+      }
+
+      function renderTargets() {
+        els.targets.innerHTML = "";
+        const all = makeTargetButton("all", "All", 8);
+        els.targets.appendChild(all);
+        state.students.forEach((student, index) => {
+          const label = avatarLabel(student.displayName || `Student ${index + 1}`);
+          els.targets.appendChild(makeTargetButton(student.clientId, label, Number(student.avatarIndex ?? index)));
+        });
+      }
+
+      function makeTargetButton(clientId, label, avatarIndex) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "target";
+        button.textContent = label;
+        button.style.background = AVATAR_COLORS[Math.abs(avatarIndex) % AVATAR_COLORS.length];
+        button.classList.toggle("active", normalizeTarget(clientId) === state.targetClientId);
+        button.addEventListener("click", () => chooseTarget(clientId));
+        return button;
+      }
+
+      function avatarLabel(displayName) {
+        const parts = String(displayName || "").trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) {
+          return "S";
+        }
+        if (parts.length === 1) {
+          return parts[0].slice(0, 2).toUpperCase();
+        }
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+      }
+
+      function renderTools() {
+        els.tools.innerHTML = "";
+        TOOLS.forEach((tool) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "tool";
+          button.textContent = tool.label;
+          button.classList.toggle("active", tool.key === state.selectedTool);
+          button.disabled = tool.key !== "clear" && !state.pointerEnabled;
+          button.addEventListener("click", () => selectTool(tool.key));
+          els.tools.appendChild(button);
+        });
+      }
+
+      function render() {
+        const connected = state.connection === "connected";
+        const busy = state.connection === "connecting";
+
+        els.connectionBadge.textContent = busy ? "Connecting" : connected ? "Connected" : "Offline";
+        els.connectionBadge.className = "badge";
+        if (connected) {
+          els.connectionBadge.classList.add("ok");
+        } else if (busy) {
+          els.connectionBadge.classList.add("busy");
+        } else {
+          els.connectionBadge.classList.add("bad");
+        }
+
+        els.connectBtn.disabled = connected || busy;
+        els.disconnectBtn.disabled = !connected && !busy;
+        els.pointerBtn.disabled = !connected;
+        els.pulseBtn.disabled = !connected;
+        els.textCastBtn.disabled = !connected || !state.features.toolEvent;
+
+        els.pointerBtn.textContent = state.pointerEnabled ? "Stop" : "Start";
+        els.pointerBtn.classList.toggle("active", state.pointerEnabled);
+        els.pointerStatus.textContent = state.pointerEnabled ? "running" : "stopped";
+
+        els.stageHint.style.display = state.pointerEnabled ? "none" : "grid";
+        els.featureStatus.textContent = `toolEvent: ${state.features.toolEvent ? "yes" : "no"}`;
+        els.selectedToolLabel.textContent = state.selectedTool;
+        els.studentCount.textContent = `${state.students.length} student${state.students.length === 1 ? "" : "s"}`;
+        els.clientShortId.textContent = state.clientId ? shortId(state.clientId) : "no client";
+        els.connectionValue.textContent = state.connection;
+        els.targetValue.textContent = targetLabel(state.targetClientId);
+        els.instructorValue.textContent = state.instructorConnected ? "Joined" : connected ? "Waiting" : "Not joined";
+        els.pointerValue.textContent = state.pointerEnabled ? "On" : "Off";
+
+        renderTargets();
+        renderTools();
+      }
+
+      function bindEvents() {
+        els.connectBtn.addEventListener("click", connect);
+        els.disconnectBtn.addEventListener("click", () => disconnect(true));
+        els.pointerBtn.addEventListener("click", togglePointer);
+        els.pulseBtn.addEventListener("click", () => sendPulse());
+        els.textCastBtn.addEventListener("click", sendTextCast);
+        els.textCast.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            sendTextCast();
+          }
+        });
+        els.clearLogBtn.addEventListener("click", () => {
+          els.log.textContent = "";
+        });
+        els.contextName.addEventListener("change", () => {
+          savePrefs();
+          sendContextUpdate();
+        });
+        els.serverUrl.addEventListener("change", savePrefs);
+        els.roomId.addEventListener("change", savePrefs);
+
+        els.stage.addEventListener("pointerdown", handleStagePointerDown);
+        els.stage.addEventListener("pointermove", handleStagePointerMove);
+        els.stage.addEventListener("pointerup", handleStagePointerUp);
+        els.stage.addEventListener("pointercancel", handleStagePointerCancel);
+        window.addEventListener("beforeunload", () => {
+          if (isOpen()) {
+            send({ type: "leave" });
+          }
+        });
+      }
+
+      loadPrefs();
+      bindEvents();
+      setCurrentPoint(state.currentPoint);
+      render();
+      logLine("Ready");
+    })();
+  </script>
+</body>
+</html>
