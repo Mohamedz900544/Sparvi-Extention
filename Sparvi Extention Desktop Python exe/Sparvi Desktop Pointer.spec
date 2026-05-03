@@ -4,12 +4,55 @@ import tempfile
 from pathlib import Path
 
 from PIL import Image
+from PyInstaller.utils.win32.versioninfo import (
+    FixedFileInfo,
+    StringFileInfo,
+    StringStruct,
+    StringTable,
+    VSVersionInfo,
+    VarFileInfo,
+    VarStruct,
+)
 
 
 project_dir = Path(globals().get("SPECPATH", ".")).resolve()
 icon_png_path = project_dir / "icon.png"
 temp_icon_path = Path(tempfile.gettempdir()) / "sparvi-desktop-pointer-build-icon.ico"
 icon_arg = []
+
+
+def sparvi_version_info(app_name):
+    exe_name = f"{app_name}.exe"
+    return VSVersionInfo(
+        ffi=FixedFileInfo(
+            filevers=(1, 0, 0, 0),
+            prodvers=(1, 0, 0, 0),
+            mask=0x3F,
+            flags=0x0,
+            OS=0x40004,
+            fileType=0x1,
+            subtype=0x0,
+            date=(0, 0),
+        ),
+        kids=[
+            StringFileInfo([
+                StringTable(
+                    "040904B0",
+                    [
+                        StringStruct("CompanyName", "Sparvi Lab"),
+                        StringStruct("FileDescription", app_name),
+                        StringStruct("FileVersion", "1.0.0.0"),
+                        StringStruct("InternalName", app_name),
+                        StringStruct("LegalCopyright", "Copyright (c) 2026 Sparvi Lab"),
+                        StringStruct("OriginalFilename", exe_name),
+                        StringStruct("ProductName", app_name),
+                        StringStruct("ProductVersion", "1.0.0.0"),
+                    ],
+                )
+            ]),
+            VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+        ],
+    )
 
 if icon_png_path.exists():
     with Image.open(icon_png_path).convert("RGBA") as image:
@@ -63,7 +106,7 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
+pointer_exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
@@ -73,7 +116,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
@@ -83,4 +126,51 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=icon_arg,
+    version=sparvi_version_info('Sparvi Desktop Pointer'),
+)
+
+student_exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='Sparvi Desktop Student',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=icon_arg,
+    version=sparvi_version_info('Sparvi Desktop Student'),
+)
+
+teacher_exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='Sparvi Desktop Teacher',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=icon_arg,
+    version=sparvi_version_info('Sparvi Desktop Teacher'),
 )

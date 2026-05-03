@@ -41,6 +41,23 @@ TOOL_KIND_MAP = {
     "circle": "draw_circle",
     "underline": "draw_underline"
 }
+ROLE_VARIANT_ENV = "SPARVI_DESKTOP_ROLE"
+
+
+def detect_role_variant():
+    explicit_role = str(os.getenv(ROLE_VARIANT_ENV) or "").strip().lower()
+    if explicit_role in {"student", "teacher", "instructor"}:
+        return "instructor" if explicit_role == "teacher" else explicit_role
+
+    executable_name = os.path.basename(sys.executable if getattr(sys, "frozen", False) else sys.argv[0]).lower()
+    if "student" in executable_name:
+        return "student"
+    if "teacher" in executable_name or "instructor" in executable_name:
+        return "instructor"
+    return ""
+
+
+APP_ROLE_VARIANT = detect_role_variant()
 
 
 def resource_path(filename):
@@ -65,7 +82,13 @@ def load_app_icon():
 class DesktopPointerWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.settings = QSettings("Sparvi", "DesktopPointer")
+        settings_name = {
+            "student": "DesktopPointerStudent",
+            "instructor": "DesktopPointerTeacher"
+        }.get(APP_ROLE_VARIANT, "DesktopPointer")
+        self.settings = QSettings("Sparvi", settings_name)
+        self.role_variant = APP_ROLE_VARIANT
+        self.teacher_local_preview_enabled = self.role_variant != "instructor"
         self.network = NetworkClient()
         self.overlay = OverlayWindow()
         self.stage_window = InstructorStageWindow(self.settings)
@@ -118,7 +141,7 @@ class DesktopPointerWindow(QWidget):
         self.update_ui()
 
     def build_ui(self):
-        self.setWindowTitle("Sparvi Desktop Pointer")
+        self.setWindowTitle(self.window_title())
         self.setMinimumSize(560, 460)
         app_icon = load_app_icon()
         if not app_icon.isNull():
@@ -136,12 +159,12 @@ class DesktopPointerWindow(QWidget):
                 logo_pixmap.scaledToHeight(42, Qt.TransformationMode.SmoothTransformation)
             )
 
-        title_label = QLabel("Sparvi Desktop Pointer")
+        title_label = QLabel(self.window_title())
         title_font = QFont("Segoe UI", 17)
         title_font.setBold(True)
         title_label.setFont(title_font)
 
-        subtitle_label = QLabel("Live instructor pointer over desktop apps, IDEs, docs, and tools.")
+        subtitle_label = QLabel(self.subtitle_text())
         subtitle_label.setWordWrap(True)
         subtitle_label.setObjectName("SubtitleLabel")
 
@@ -208,6 +231,8 @@ class DesktopPointerWindow(QWidget):
         self.role_input = QComboBox()
         self.role_input.addItem("Student", "student")
         self.role_input.addItem("Instructor", "instructor")
+        if self.role_variant:
+            self.role_input.setEnabled(False)
 
         self.password_label = QLabel("Instructor Password")
         self.password_input = QLineEdit()
@@ -277,6 +302,20 @@ class DesktopPointerWindow(QWidget):
         self.pulse_button.clicked.connect(self.handle_send_pulse_clicked)
         self.role_input.currentIndexChanged.connect(self.handle_role_changed)
         self.session_input.editingFinished.connect(self.save_settings)
+
+    def window_title(self):
+        if self.role_variant == "student":
+            return "Sparvi Desktop Student"
+        if self.role_variant == "instructor":
+            return "Sparvi Desktop Teacher"
+        return "Sparvi Desktop Pointer"
+
+    def subtitle_text(self):
+        if self.role_variant == "student":
+            return "Student desktop receiver for live teacher pointer, pulses, and teaching marks."
+        if self.role_variant == "instructor":
+            return "Teacher desktop controller for live pointer, targeting, and teaching tools."
+        return "Live instructor pointer over desktop apps, IDEs, docs, and tools."
 
     def create_card(self):
         card = QFrame()
@@ -396,7 +435,7 @@ class DesktopPointerWindow(QWidget):
 
     def load_settings(self):
         self.session_input.setText(self.settings.value("sessionId", ""))
-        saved_role = self.settings.value("role", "student")
+        saved_role = self.role_variant or self.settings.value("role", "student")
         index = 1 if saved_role == "instructor" else 0
         self.role_input.setCurrentIndex(index)
 
@@ -405,6 +444,8 @@ class DesktopPointerWindow(QWidget):
         self.settings.setValue("role", self.current_role())
 
     def current_role(self):
+        if self.role_variant:
+            return self.role_variant
         return self.role_input.currentData() or "student"
 
     def handle_connect_clicked(self):
@@ -468,7 +509,9 @@ class DesktopPointerWindow(QWidget):
             self.current_context,
             self.pointer_target_client_id
         )
-        self.overlay.set_teacher_pointer_enabled(self.pointer_enabled)
+        self.overlay.set_teacher_pointer_enabled(
+            self.pointer_enabled if self.should_preview_teacher_output() else False
+        )
         if not self.pointer_enabled:
             self.draw_interaction = None
         self.update_mouse_capture_state()
@@ -494,7 +537,7 @@ class DesktopPointerWindow(QWidget):
             self.current_context,
             self.pointer_target_client_id
         )
-        self.overlay.show_click_pulse(normalized["xRatio"], normalized["yRatio"])
+        self.show_local_teacher_pulse(normalized["xRatio"], normalized["yRatio"])
 
     def handle_role_changed(self):
         if self.current_role() != "instructor":
@@ -742,7 +785,7 @@ class DesktopPointerWindow(QWidget):
                 "yRatio": stage_point["yRatio"]
             }
             if self.send_teaching_tool_event(event):
-                self.overlay.render_teaching_tool_event(event)
+                self.render_local_teacher_tool_event(event)
 
     def handle_global_mouse_click(self, x, y, button, pressed):
         if not self.should_send_global_pointer():
@@ -782,7 +825,7 @@ class DesktopPointerWindow(QWidget):
                 "stepNumber": self.hotspot_step_number
             }
             if self.send_teaching_tool_event(event):
-                self.overlay.render_teaching_tool_event(event)
+                self.render_local_teacher_tool_event(event)
                 self.hotspot_step_number += 1
             return
 
@@ -792,7 +835,7 @@ class DesktopPointerWindow(QWidget):
             self.current_context,
             self.pointer_target_client_id
         )
-        self.overlay.show_click_pulse(point["xRatio"], point["yRatio"])
+        self.show_local_teacher_pulse(point["xRatio"], point["yRatio"])
 
     def _handle_draw_tool_click(self, x, y, point, pressed):
         if pressed:
@@ -828,7 +871,7 @@ class DesktopPointerWindow(QWidget):
             "y2Ratio": interaction["endPoint"]["yRatio"]
         }
         if self.send_teaching_tool_event(event):
-            self.overlay.render_teaching_tool_event(event)
+            self.render_local_teacher_tool_event(event)
 
     def _send_point_tool_event(self, kind, point):
         event = {
@@ -837,7 +880,7 @@ class DesktopPointerWindow(QWidget):
             "yRatio": point["yRatio"]
         }
         if self.send_teaching_tool_event(event):
-            self.overlay.render_teaching_tool_event(event)
+            self.render_local_teacher_tool_event(event)
 
     def send_teaching_tool_event(self, event):
         if not self.server_features.get("toolEvent"):
@@ -857,6 +900,17 @@ class DesktopPointerWindow(QWidget):
             and self.network.connected
             and self.pointer_enabled
         )
+
+    def should_preview_teacher_output(self):
+        return self.current_role() == "instructor" and self.teacher_local_preview_enabled
+
+    def show_local_teacher_pulse(self, x_ratio, y_ratio):
+        if self.should_preview_teacher_output():
+            self.overlay.show_click_pulse(x_ratio, y_ratio)
+
+    def render_local_teacher_tool_event(self, event):
+        if self.should_preview_teacher_output():
+            self.overlay.render_teaching_tool_event(event)
 
     def should_show_stage(self):
         return (
@@ -927,6 +981,8 @@ class DesktopPointerWindow(QWidget):
         if self.current_role() == "instructor":
             if not self.pointer_enabled:
                 return "Connected. Start Live Pointer to show the floating frame, avatars, and tool bar on the desktop."
+            if not self.teacher_local_preview_enabled:
+                return "Live Pointer is on. Pointer movement and teaching marks are sent to the selected student view only."
             return "Live Pointer is on. Only movement and clicks inside the floating frame are sent, and you can target one student or all."
 
         if not self.peer_state.get("instructorConnected"):
@@ -961,7 +1017,7 @@ class DesktopPointerWindow(QWidget):
         self.connect_button.setDisabled(connected or busy)
         self.disconnect_button.setDisabled(not connected and not busy)
         self.session_input.setDisabled(connected or busy)
-        self.role_input.setDisabled(connected or busy)
+        self.role_input.setDisabled(bool(self.role_variant) or connected or busy)
         self.password_label.setVisible(is_instructor)
         self.password_input.setVisible(is_instructor)
         self.password_input.setDisabled(connected or busy)

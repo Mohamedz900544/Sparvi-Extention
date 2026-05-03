@@ -42,6 +42,16 @@ This folder contains a desktop Python version of Sparvi that works on top of nor
 
 The overlay and active-window detection were built primarily for Windows desktop use.
 
+## Windows exe compatibility
+
+The PyInstaller exe is not universal across every Windows version and CPU architecture. It uses the architecture of the Python that builds it.
+
+- Build with 64-bit Python for Windows 10/11 64-bit.
+- Build with ARM64 Python on Windows ARM64 if you need a native ARM64 exe.
+- This PySide6/Qt6 desktop app is for Windows 10 1809 or newer. It is not a Windows 7/8/8.1 app.
+- A 64-bit exe will show "This app can't run on your PC" on 32-bit Windows.
+- For Windows 7/8.1 or 32-bit Windows, this app would need a separate legacy UI build, for example using Python 3.8 plus Qt5/PyQt5 or another 32-bit-capable GUI toolkit.
+
 ## Install
 
 Open two terminals inside this folder.
@@ -137,6 +147,8 @@ When the build finishes, the executable will be created here:
 
 ```text
 dist\Sparvi Desktop Pointer.exe
+dist\Sparvi Desktop Student.exe
+dist\Sparvi Desktop Teacher.exe
 ```
 
 ## Notes
