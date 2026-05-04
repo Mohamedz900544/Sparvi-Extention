@@ -1,4 +1,6 @@
 import math
+import sys
+import threading
 import time
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
@@ -9,6 +11,16 @@ from desktop_utils import denormalize_point, get_virtual_desktop_rect, shorten_l
 
 
 POINTER_EASING = 0.55
+TROPHY_TEXT_CAST_PREFIX = "SPARVI_REWARD_TROPHY|"
+TROPHY_DURATION_SECONDS = 2.8
+TROPHY_CONFETTI_COLORS = [
+    QColor(37, 99, 235),
+    QColor(239, 68, 68),
+    QColor(16, 185, 129),
+    QColor(245, 158, 11),
+    QColor(217, 70, 239),
+    QColor(14, 165, 233)
+]
 
 
 class TextCastPopupWindow(QWidget):
@@ -168,6 +180,7 @@ class OverlayWindow(QWidget):
         self._freeze_markers = []
         self._hotspots = []
         self._highlights = []
+        self._trophy_rewards = []
         self._mismatch_visible = False
         self._mismatch_message = "Teacher is on a different app or window"
         self._text_popup = TextCastPopupWindow()
@@ -265,6 +278,8 @@ class OverlayWindow(QWidget):
             self._render_freeze_marker(event)
         elif kind == "guided_hotspot":
             self._render_hotspot(event)
+        elif kind == "trophy_reward":
+            self._render_trophy_reward(event)
         elif kind == "text_cast":
             self._render_text_cast(event)
         elif kind == "clear_tools":
@@ -276,6 +291,7 @@ class OverlayWindow(QWidget):
         self._freeze_markers = []
         self._hotspots = []
         self._highlights = []
+        self._trophy_rewards = []
         self._text_popup.hide()
         self.update()
 
@@ -318,7 +334,8 @@ class OverlayWindow(QWidget):
         before_counts = (
             len(self._click_pulses),
             len(self._laser_points),
-            len(self._highlights)
+            len(self._highlights),
+            len(self._trophy_rewards)
         )
 
         self._click_pulses = [
@@ -333,14 +350,24 @@ class OverlayWindow(QWidget):
             item for item in self._highlights
             if (now - item["created_at"]) <= 3.5
         ]
+        self._trophy_rewards = [
+            item for item in self._trophy_rewards
+            if (now - item["created_at"]) <= TROPHY_DURATION_SECONDS
+        ]
 
         after_counts = (
             len(self._click_pulses),
             len(self._laser_points),
-            len(self._highlights)
+            len(self._highlights),
+            len(self._trophy_rewards)
         )
 
-        return before_counts != after_counts or bool(self._click_pulses or self._laser_points or self._highlights)
+        return before_counts != after_counts or bool(
+            self._click_pulses
+            or self._laser_points
+            or self._highlights
+            or self._trophy_rewards
+        )
 
     def paintEvent(self, _event):
         painter = QPainter(self)
@@ -353,6 +380,7 @@ class OverlayWindow(QWidget):
         self._draw_saved_hotspots(painter)
         self._draw_laser_points(painter)
         self._draw_click_pulses(painter)
+        self._draw_trophy_rewards(painter)
 
         if self._pointer_visible:
             self._draw_pointer(painter)
@@ -466,6 +494,99 @@ class OverlayWindow(QWidget):
             painter.setPen(QPen(QColor(250, 204, 21, max(0, opacity)), 3))
             painter.setBrush(QColor(250, 204, 21, max(0, int(opacity * 0.14))))
             painter.drawRoundedRect(rect, 8, 8)
+
+    def _draw_trophy_rewards(self, painter):
+        now = time.monotonic()
+        for reward in self._trophy_rewards:
+            age = max(0.0, now - reward["created_at"])
+            progress = min(1.0, age / TROPHY_DURATION_SECONDS)
+            intro = min(1.0, age / 0.42)
+            outro = min(1.0, max(0.0, (TROPHY_DURATION_SECONDS - age) / 0.55))
+            opacity = int(255 * min(intro, outro))
+            scale = 0.72 + (0.3 * ease_out_back(intro)) + (0.04 * math.sin(age * 14))
+            lift = 22 * progress
+            center_x = reward["x"]
+            center_y = reward["y"] - lift
+
+            self._draw_trophy_confetti(painter, reward, progress, opacity)
+
+            painter.save()
+            painter.translate(center_x, center_y)
+            painter.scale(scale, scale)
+            painter.setOpacity(max(0.0, min(1.0, opacity / 255.0)))
+            self._draw_trophy_shape(painter)
+            painter.restore()
+
+            message = reward.get("message") or "Great answer!"
+            font = QFont("Segoe UI", 18)
+            font.setBold(True)
+            painter.setFont(font)
+            metrics = painter.fontMetrics()
+            label_width = min(max(190, metrics.horizontalAdvance(message) + 36), 420)
+            label_rect = QRectF(
+                center_x - (label_width / 2),
+                center_y + (76 * scale),
+                label_width,
+                42
+            )
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(15, 23, 42, max(0, int(opacity * 0.88))))
+            painter.drawRoundedRect(label_rect, 18, 18)
+            painter.setPen(QColor(255, 255, 255, max(0, opacity)))
+            painter.drawText(label_rect.adjusted(14, 0, -14, 0), Qt.AlignmentFlag.AlignCenter, message)
+
+    def _draw_trophy_shape(self, painter):
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        glow = QColor(250, 204, 21, 70)
+        painter.setBrush(glow)
+        painter.drawEllipse(QPointF(0, 4), 82, 82)
+
+        shadow = QColor(120, 53, 15, 90)
+        painter.setBrush(shadow)
+        painter.drawRoundedRect(QRectF(-44, 55, 88, 14), 7, 7)
+
+        cup_path = QPainterPath()
+        cup_path.moveTo(-42, -42)
+        cup_path.cubicTo(-36, 10, -24, 36, 0, 36)
+        cup_path.cubicTo(24, 36, 36, 10, 42, -42)
+        cup_path.closeSubpath()
+        painter.setBrush(QColor(250, 204, 21))
+        painter.drawPath(cup_path)
+
+        painter.setBrush(QColor(245, 158, 11))
+        painter.drawRoundedRect(QRectF(-12, 32, 24, 26), 8, 8)
+        painter.drawRoundedRect(QRectF(-34, 54, 68, 16), 8, 8)
+
+        painter.setPen(QPen(QColor(245, 158, 11), 8, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawArc(QRectF(-68, -34, 42, 52), 76 * 16, 212 * 16)
+        painter.drawArc(QRectF(26, -34, 42, 52), -108 * 16, 212 * 16)
+
+        painter.setPen(QPen(QColor(255, 247, 237, 160), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawLine(QPointF(-20, -28), QPointF(-14, 14))
+
+    def _draw_trophy_confetti(self, painter, reward, progress, opacity):
+        burst = ease_out_cubic(min(1.0, progress / 0.62))
+        drift = min(1.0, progress)
+        for index in range(28):
+            angle = (index * 2.3999632297) + reward["seed"]
+            radius = 36 + (142 * burst) + (index % 5) * 8
+            x = reward["x"] + math.cos(angle) * radius
+            y = reward["y"] + math.sin(angle) * radius + (88 * drift * drift) - 40
+            color = TROPHY_CONFETTI_COLORS[index % len(TROPHY_CONFETTI_COLORS)]
+            color = QColor(color.red(), color.green(), color.blue(), max(0, int(opacity * (1.0 - progress * 0.35))))
+
+            painter.save()
+            painter.translate(x, y)
+            painter.rotate((angle * 57.2958) + (progress * 280))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(color)
+            if index % 3 == 0:
+                painter.drawEllipse(QPointF(0, 0), 4, 4)
+            else:
+                painter.drawRoundedRect(QRectF(-4, -2, 8, 4), 2, 2)
+            painter.restore()
 
     def _draw_pointer(self, painter):
         x = self._current_x
@@ -611,7 +732,36 @@ class OverlayWindow(QWidget):
         if not text:
             return
 
+        if text.startswith(TROPHY_TEXT_CAST_PREFIX):
+            self._render_trophy_reward({
+                "message": text[len(TROPHY_TEXT_CAST_PREFIX):] or "Great answer!"
+            })
+            return
+
         self._text_popup.show_text(text[:2000])
+
+    def _render_trophy_reward(self, event):
+        point = self._ratios_to_local_point(event.get("xRatio"), event.get("yRatio"))
+        if point is None:
+            point = (self.width() / 2, self.height() / 2)
+
+        message = str((event or {}).get("message") or "Great answer!").strip() or "Great answer!"
+        self._trophy_rewards.append({
+            "x": point[0],
+            "y": point[1],
+            "message": shorten_label(message, 42),
+            "seed": (time.monotonic() * 3.1) % math.tau,
+            "created_at": time.monotonic()
+        })
+        self._play_trophy_sound()
+        self.update()
+
+    def _play_trophy_sound(self):
+        if sys.platform == "win32":
+            threading.Thread(target=play_windows_trophy_sound, daemon=True).start()
+            return
+
+        QGuiApplication.beep()
 
     def _ratios_to_local_point(self, x_ratio, y_ratio):
         point = denormalize_point(x_ratio, y_ratio, self._desktop_rect)
@@ -639,3 +789,25 @@ class OverlayWindow(QWidget):
     def closeEvent(self, event):
         self._text_popup.close()
         super().closeEvent(event)
+
+
+def ease_out_cubic(value):
+    value = max(0.0, min(1.0, value))
+    return 1 - pow(1 - value, 3)
+
+
+def ease_out_back(value):
+    value = max(0.0, min(1.0, value))
+    c1 = 1.70158
+    c3 = c1 + 1
+    return 1 + c3 * pow(value - 1, 3) + c1 * pow(value - 1, 2)
+
+
+def play_windows_trophy_sound():
+    try:
+        import winsound
+
+        for frequency, duration in ((784, 90), (988, 100), (1175, 130), (1568, 170)):
+            winsound.Beep(frequency, duration)
+    except Exception:
+        QGuiApplication.beep()

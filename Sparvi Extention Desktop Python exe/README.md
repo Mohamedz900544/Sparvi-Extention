@@ -151,6 +151,27 @@ dist\Sparvi Desktop Student.exe
 dist\Sparvi Desktop Teacher.exe
 ```
 
+## Build the macOS app
+
+PyInstaller must build macOS apps on macOS. Copy this folder to a Mac, then run:
+
+```bash
+chmod +x build_mac.command
+./build_mac.command
+```
+
+When the build finishes, the app bundles will be created here:
+
+```text
+dist-macos/Sparvi Desktop Pointer.app
+dist-macos/Sparvi Desktop Student.app
+dist-macos/Sparvi Desktop Teacher.app
+```
+
+The repository root also includes `Start_Sparvi_Tablet.command`, which opens the built macOS app if it exists, or falls back to running `client_app.py` through a local `.venv-macos` environment.
+
+On first launch, macOS may require Accessibility or Input Monitoring permission for the global mouse pointer features.
+
 ## Notes
 
 - This desktop version mirrors movement only inside the floating teaching frame, matching the browser extension model more closely

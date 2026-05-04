@@ -27,6 +27,7 @@ AVATAR_COLORS = [
 TOOLS = [
     ("pointer", "Ptr", "Pointer"),
     ("laser", "Laser", "Laser"),
+    ("trophy", "Trophy", "Send Trophy"),
     ("arrow", "Arrow", "Arrow"),
     ("circle", "Circle", "Circle"),
     ("underline", "Line", "Underline"),
@@ -159,6 +160,7 @@ class StageTargetWindow(QWidget):
 class StageToolWindow(QWidget):
     tool_selected = Signal(str)
     clear_requested = Signal()
+    reward_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -195,6 +197,8 @@ class StageToolWindow(QWidget):
             button.setProperty("selected", "false")
             if tool_key == "clear":
                 button.clicked.connect(self.clear_requested.emit)
+            elif tool_key == "trophy":
+                button.clicked.connect(self.reward_requested.emit)
             else:
                 button.clicked.connect(lambda _checked=False, key=tool_key: self.tool_selected.emit(key))
             self._buttons[tool_key] = button

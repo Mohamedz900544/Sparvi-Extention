@@ -7,8 +7,12 @@ __pycache__/
 # PyInstaller / desktop build outputs
 Sparvi Extention Desktop Python exe/build/
 Sparvi Extention Desktop Python exe/build-fresh/
+Sparvi Extention Desktop Python exe/build-macos/
 Sparvi Extention Desktop Python exe/dist/
 Sparvi Extention Desktop Python exe/dist-fresh/
+Sparvi Extention Desktop Python exe/dist-macos/
+Sparvi Extention Desktop Python exe/.venv-macos/
+Sparvi Extention Desktop Python exe/icon.icns
 
 # Local scratch output
 .dist/

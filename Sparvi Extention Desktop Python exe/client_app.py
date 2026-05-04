@@ -41,6 +41,7 @@ TOOL_KIND_MAP = {
     "circle": "draw_circle",
     "underline": "draw_underline"
 }
+TROPHY_TEXT_CAST_PREFIX = "SPARVI_REWARD_TROPHY|"
 ROLE_VARIANT_ENV = "SPARVI_DESKTOP_ROLE"
 
 
@@ -107,7 +108,8 @@ class DesktopPointerWindow(QWidget):
         self.current_tool_mode = "pointer"
         self.hotspot_step_number = 1
         self.server_features = {
-            "toolEvent": False
+            "toolEvent": False,
+            "trophyReward": False
         }
         self.local_error = ""
         self.current_context = "Desktop"
@@ -269,8 +271,11 @@ class DesktopPointerWindow(QWidget):
         self.pointer_button = QPushButton("Start Live Pointer")
         self.pointer_button.setObjectName("PrimaryButton")
         self.pulse_button = QPushButton("Send Pulse")
+        self.trophy_button = QPushButton("Send Trophy")
+        self.trophy_button.setObjectName("RewardButton")
         action_buttons.addWidget(self.pointer_button)
         action_buttons.addWidget(self.pulse_button)
+        action_buttons.addWidget(self.trophy_button)
 
         instructor_layout.addWidget(instructor_title)
         instructor_layout.addLayout(action_buttons)
@@ -300,6 +305,7 @@ class DesktopPointerWindow(QWidget):
         self.disconnect_button.clicked.connect(self.handle_disconnect_clicked)
         self.pointer_button.clicked.connect(self.handle_pointer_toggled)
         self.pulse_button.clicked.connect(self.handle_send_pulse_clicked)
+        self.trophy_button.clicked.connect(self.handle_send_trophy_clicked)
         self.role_input.currentIndexChanged.connect(self.handle_role_changed)
         self.session_input.editingFinished.connect(self.save_settings)
 
@@ -406,6 +412,14 @@ class DesktopPointerWindow(QWidget):
             QPushButton#PrimaryButton:hover:!disabled {
                 background: #1d4ed8;
             }
+            QPushButton#RewardButton {
+                background: #f59e0b;
+                color: #ffffff;
+                border-color: #d97706;
+            }
+            QPushButton#RewardButton:hover:!disabled {
+                background: #d97706;
+            }
             QPushButton:disabled {
                 background: #eef1f6;
                 color: #98a2b3;
@@ -431,6 +445,7 @@ class DesktopPointerWindow(QWidget):
         self.target_window.target_selected.connect(self.handle_target_selected)
         self.tool_window.tool_selected.connect(self.handle_tool_selected)
         self.tool_window.clear_requested.connect(self.handle_clear_tools)
+        self.tool_window.reward_requested.connect(self.handle_send_trophy_clicked)
         self.text_cast_window.text_submitted.connect(self.handle_text_cast_submitted)
 
     def load_settings(self):
@@ -539,6 +554,32 @@ class DesktopPointerWindow(QWidget):
         )
         self.show_local_teacher_pulse(normalized["xRatio"], normalized["yRatio"])
 
+    def handle_send_trophy_clicked(self):
+        if self.current_role() != "instructor" or not self.network.connected:
+            return
+
+        event = {
+            "kind": "trophy_reward",
+            "message": "Great answer!"
+        }
+
+        if not self.server_features.get("trophyReward"):
+            if not self.pointer_enabled:
+                self.set_error("Start Live Pointer before sending trophies on this backend.")
+                return
+            event = {
+                "kind": "text_cast",
+                "text": TROPHY_TEXT_CAST_PREFIX + "Great answer!"
+            }
+
+        normalized = self.current_stage_point_or_none()
+        if normalized:
+            event["xRatio"] = normalized["xRatio"]
+            event["yRatio"] = normalized["yRatio"]
+
+        if self.send_teaching_tool_event(event):
+            self.render_local_teacher_tool_event(event)
+
     def handle_role_changed(self):
         if self.current_role() != "instructor":
             self.password_input.clear()
@@ -547,7 +588,8 @@ class DesktopPointerWindow(QWidget):
         self.current_tool_mode = "pointer"
         self.draw_interaction = None
         self.server_features = {
-            "toolEvent": False
+            "toolEvent": False,
+            "trophyReward": False
         }
         self.overlay.clear_teaching_artifacts()
         self.stage_window.set_stage_visible(False)
@@ -565,7 +607,8 @@ class DesktopPointerWindow(QWidget):
             self.pointer_enabled = False
             self.draw_interaction = None
             self.server_features = {
-                "toolEvent": False
+                "toolEvent": False,
+                "trophyReward": False
             }
             self.overlay.clear_pointer()
             self.overlay.clear_teaching_artifacts()
@@ -587,7 +630,8 @@ class DesktopPointerWindow(QWidget):
         self.client_id = payload.get("clientId", "")
         features = payload.get("features") or {}
         self.server_features = {
-            "toolEvent": bool(features.get("toolEvent"))
+            "toolEvent": bool(features.get("toolEvent")),
+            "trophyReward": bool(features.get("trophyReward"))
         }
         self.clear_error()
         self.update_ui()
@@ -925,6 +969,18 @@ class DesktopPointerWindow(QWidget):
             return None
         return normalize_point_in_rect(x, y, self.stage_rect)
 
+    def current_stage_point_or_none(self):
+        if not self.stage_window.isVisible():
+            return None
+
+        cursor_pos = QCursor.pos()
+        normalized = self.get_stage_normalized_point(cursor_pos.x(), cursor_pos.y())
+        if normalized:
+            return normalized
+
+        center = self.stage_window.native_content_center_point()
+        return self.get_stage_normalized_point(center["x"], center["y"])
+
     def update_mouse_capture_state(self):
         self.mouse_capture.set_enabled(self.should_send_global_pointer())
 
@@ -1025,6 +1081,7 @@ class DesktopPointerWindow(QWidget):
         self.instructor_card.setVisible(is_instructor)
         self.pointer_button.setDisabled(not connected or not is_instructor)
         self.pulse_button.setDisabled(not connected or not is_instructor)
+        self.trophy_button.setDisabled(not connected or not is_instructor)
         self.pointer_button.setText("Stop Live Pointer" if self.pointer_enabled else "Start Live Pointer")
 
         self.update_stage_controls()

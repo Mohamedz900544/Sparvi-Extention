@@ -186,6 +186,7 @@ async def handle_join(state, message):
         "features": {
             "desktopOverlay": True,
             "toolEvent": True,
+            "trophyReward": True,
             "instructorAuth": bool(INSTRUCTOR_AUTH_URL)
         }
     })
@@ -247,7 +248,7 @@ async def handle_click_pulse(state, message):
 
 
 async def handle_tool_event(state, message):
-    if not is_authorized_instructor(state) or not state.pointer_enabled:
+    if not is_authorized_instructor(state):
         return
 
     event = normalize_tool_event(message.get("event"))
@@ -256,6 +257,9 @@ async def handle_tool_event(state, message):
             "type": "error",
             "message": "Invalid teaching tool event."
         })
+        return
+
+    if not state.pointer_enabled and event.get("kind") != "trophy_reward":
         return
 
     state.current_context = normalize_context(event.get("currentContext"), fallback=state.current_context)
@@ -526,6 +530,7 @@ def normalize_tool_event(value):
         "highlight_element",
         "freeze_marker",
         "guided_hotspot",
+        "trophy_reward",
         "text_cast",
         "clear_tools"
     }:
@@ -545,6 +550,15 @@ def normalize_tool_event(value):
             return None
         event["xRatio"] = x_ratio
         event["yRatio"] = y_ratio
+
+    if kind == "trophy_reward":
+        x_ratio = normalize_ratio(value.get("xRatio"))
+        y_ratio = normalize_ratio(value.get("yRatio"))
+        if x_ratio is not None and y_ratio is not None:
+            event["xRatio"] = x_ratio
+            event["yRatio"] = y_ratio
+        message = str(value.get("message") or "").strip()
+        event["message"] = message[:80] if message else "Great answer!"
 
     if kind in {"draw_arrow", "draw_circle", "draw_underline"}:
         x1_ratio = normalize_ratio(value.get("x1Ratio"))
