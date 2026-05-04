@@ -59,7 +59,9 @@ class NetworkClient(QObject):
         self._pointer_target_client_id = "all"
         self._server_features = {
             "toolEvent": False,
-            "trophyReward": False
+            "instantReward": False,
+            "trophyReward": False,
+            "heartReward": False
         }
 
     @property
@@ -78,7 +80,9 @@ class NetworkClient(QObject):
         self._pointer_target_client_id = normalize_target(target_client_id)
         self._server_features = {
             "toolEvent": False,
-            "trophyReward": False
+            "instantReward": False,
+            "trophyReward": False,
+            "heartReward": False
         }
 
         self._manual_disconnect = False
@@ -114,7 +118,9 @@ class NetworkClient(QObject):
             self._instructor_password = ""
         self._server_features = {
             "toolEvent": False,
-            "trophyReward": False
+            "instantReward": False,
+            "trophyReward": False,
+            "heartReward": False
         }
 
         self.connection_changed.emit("disconnected")
@@ -252,7 +258,9 @@ class NetworkClient(QObject):
             features = message.get("features") or {}
             self._server_features = {
                 "toolEvent": bool(features.get("toolEvent")),
-                "trophyReward": bool(features.get("trophyReward"))
+                "instantReward": bool(features.get("instantReward")),
+                "trophyReward": bool(features.get("trophyReward")),
+                "heartReward": bool(features.get("heartReward"))
             }
             self.joined_received.emit(message)
             return

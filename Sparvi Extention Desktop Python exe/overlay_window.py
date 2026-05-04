@@ -1,7 +1,10 @@
+import io
 import math
+import struct
 import sys
 import threading
 import time
+import wave
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPainterPath, QPen, QPolygonF
@@ -12,6 +15,7 @@ from desktop_utils import denormalize_point, get_virtual_desktop_rect, shorten_l
 
 POINTER_EASING = 0.55
 TROPHY_TEXT_CAST_PREFIX = "SPARVI_REWARD_TROPHY|"
+HEART_TEXT_CAST_PREFIX = "SPARVI_REWARD_HEART|"
 TROPHY_DURATION_SECONDS = 2.8
 TROPHY_CONFETTI_COLORS = [
     QColor(37, 99, 235),
@@ -279,7 +283,9 @@ class OverlayWindow(QWidget):
         elif kind == "guided_hotspot":
             self._render_hotspot(event)
         elif kind == "trophy_reward":
-            self._render_trophy_reward(event)
+            self._render_reward(event, "trophy")
+        elif kind == "heart_reward":
+            self._render_reward(event, "heart")
         elif kind == "text_cast":
             self._render_text_cast(event)
         elif kind == "clear_tools":
@@ -514,10 +520,13 @@ class OverlayWindow(QWidget):
             painter.translate(center_x, center_y)
             painter.scale(scale, scale)
             painter.setOpacity(max(0.0, min(1.0, opacity / 255.0)))
-            self._draw_trophy_shape(painter)
+            if reward.get("kind") == "heart":
+                self._draw_heart_shape(painter)
+            else:
+                self._draw_trophy_shape(painter)
             painter.restore()
 
-            message = reward.get("message") or "Great answer!"
+            message = reward.get("message") or ("Nice work!" if reward.get("kind") == "heart" else "Great answer!")
             font = QFont("Segoe UI", 18)
             font.setBold(True)
             painter.setFont(font)
@@ -534,6 +543,29 @@ class OverlayWindow(QWidget):
             painter.drawRoundedRect(label_rect, 18, 18)
             painter.setPen(QColor(255, 255, 255, max(0, opacity)))
             painter.drawText(label_rect.adjusted(14, 0, -14, 0), Qt.AlignmentFlag.AlignCenter, message)
+
+    def _draw_heart_shape(self, painter):
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        painter.setBrush(QColor(244, 63, 94, 62))
+        painter.drawEllipse(QPointF(0, 4), 86, 78)
+
+        path = QPainterPath()
+        path.moveTo(0, 58)
+        path.cubicTo(-68, 12, -70, -38, -28, -42)
+        path.cubicTo(-12, -44, -4, -34, 0, -24)
+        path.cubicTo(4, -34, 12, -44, 28, -42)
+        path.cubicTo(70, -38, 68, 12, 0, 58)
+        path.closeSubpath()
+        painter.setBrush(QColor(244, 63, 94))
+        painter.drawPath(path)
+
+        painter.setBrush(QColor(251, 113, 133, 180))
+        painter.drawEllipse(QPointF(-22, -22), 10, 13)
+        painter.drawEllipse(QPointF(20, -23), 10, 13)
+
+        painter.setBrush(QColor(136, 19, 55, 90))
+        painter.drawRoundedRect(QRectF(-38, 56, 76, 12), 6, 6)
 
     def _draw_trophy_shape(self, painter):
         painter.setPen(Qt.PenStyle.NoPen)
@@ -574,7 +606,10 @@ class OverlayWindow(QWidget):
             radius = 36 + (142 * burst) + (index % 5) * 8
             x = reward["x"] + math.cos(angle) * radius
             y = reward["y"] + math.sin(angle) * radius + (88 * drift * drift) - 40
-            color = TROPHY_CONFETTI_COLORS[index % len(TROPHY_CONFETTI_COLORS)]
+            if reward.get("kind") == "heart":
+                color = QColor(244, 63, 94) if index % 2 else QColor(251, 113, 133)
+            else:
+                color = TROPHY_CONFETTI_COLORS[index % len(TROPHY_CONFETTI_COLORS)]
             color = QColor(color.red(), color.green(), color.blue(), max(0, int(opacity * (1.0 - progress * 0.35))))
 
             painter.save()
@@ -582,11 +617,23 @@ class OverlayWindow(QWidget):
             painter.rotate((angle * 57.2958) + (progress * 280))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color)
-            if index % 3 == 0:
+            if reward.get("kind") == "heart" and index % 3 != 0:
+                self._draw_small_heart(painter)
+            elif index % 3 == 0:
                 painter.drawEllipse(QPointF(0, 0), 4, 4)
             else:
                 painter.drawRoundedRect(QRectF(-4, -2, 8, 4), 2, 2)
             painter.restore()
+
+    def _draw_small_heart(self, painter):
+        path = QPainterPath()
+        path.moveTo(0, 5)
+        path.cubicTo(-9, -1, -8, -8, -3, -8)
+        path.cubicTo(-1, -8, 0, -6, 0, -4)
+        path.cubicTo(0, -6, 1, -8, 3, -8)
+        path.cubicTo(8, -8, 9, -1, 0, 5)
+        path.closeSubpath()
+        painter.drawPath(path)
 
     def _draw_pointer(self, painter):
         x = self._current_x
@@ -733,32 +780,40 @@ class OverlayWindow(QWidget):
             return
 
         if text.startswith(TROPHY_TEXT_CAST_PREFIX):
-            self._render_trophy_reward({
+            self._render_reward({
                 "message": text[len(TROPHY_TEXT_CAST_PREFIX):] or "Great answer!"
-            })
+            }, "trophy")
+            return
+
+        if text.startswith(HEART_TEXT_CAST_PREFIX):
+            self._render_reward({
+                "message": text[len(HEART_TEXT_CAST_PREFIX):] or "Nice work!"
+            }, "heart")
             return
 
         self._text_popup.show_text(text[:2000])
 
-    def _render_trophy_reward(self, event):
+    def _render_reward(self, event, reward_kind):
         point = self._ratios_to_local_point(event.get("xRatio"), event.get("yRatio"))
         if point is None:
             point = (self.width() / 2, self.height() / 2)
 
-        message = str((event or {}).get("message") or "Great answer!").strip() or "Great answer!"
+        default_message = "Nice work!" if reward_kind == "heart" else "Great answer!"
+        message = str((event or {}).get("message") or default_message).strip() or default_message
         self._trophy_rewards.append({
+            "kind": reward_kind,
             "x": point[0],
             "y": point[1],
             "message": shorten_label(message, 42),
             "seed": (time.monotonic() * 3.1) % math.tau,
             "created_at": time.monotonic()
         })
-        self._play_trophy_sound()
+        self._play_reward_sound(reward_kind)
         self.update()
 
-    def _play_trophy_sound(self):
+    def _play_reward_sound(self, reward_kind):
         if sys.platform == "win32":
-            threading.Thread(target=play_windows_trophy_sound, daemon=True).start()
+            threading.Thread(target=play_windows_reward_sound, args=(reward_kind,), daemon=True).start()
             return
 
         QGuiApplication.beep()
@@ -803,11 +858,52 @@ def ease_out_back(value):
     return 1 + c3 * pow(value - 1, 3) + c1 * pow(value - 1, 2)
 
 
-def play_windows_trophy_sound():
+def play_windows_reward_sound(reward_kind):
     try:
         import winsound
 
-        for frequency, duration in ((784, 90), (988, 100), (1175, 130), (1568, 170)):
-            winsound.Beep(frequency, duration)
+        winsound.PlaySound(build_reward_wav_bytes(reward_kind), winsound.SND_MEMORY)
     except Exception:
-        QGuiApplication.beep()
+        try:
+            import winsound
+
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            QGuiApplication.beep()
+
+
+def build_reward_wav_bytes(reward_kind):
+    sample_rate = 44100
+    notes = (
+        (659.25, 0.08),
+        (783.99, 0.08),
+        (987.77, 0.1),
+        (1318.51, 0.16),
+    )
+    if reward_kind == "heart":
+        notes = (
+            (523.25, 0.08),
+            (659.25, 0.08),
+            (783.99, 0.12),
+            (1046.5, 0.16),
+        )
+
+    frames = bytearray()
+    for frequency, duration in notes:
+        total_samples = int(sample_rate * duration)
+        for index in range(total_samples):
+            phase = index / sample_rate
+            envelope = min(1.0, index / max(1, total_samples * 0.12))
+            envelope *= min(1.0, (total_samples - index) / max(1, total_samples * 0.18))
+            value = math.sin(2 * math.pi * frequency * phase)
+            value += 0.28 * math.sin(2 * math.pi * frequency * 2 * phase)
+            sample = int(max(-1.0, min(1.0, value * 0.34 * envelope)) * 32767)
+            frames.extend(struct.pack("<h", sample))
+
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(bytes(frames))
+    return buffer.getvalue()

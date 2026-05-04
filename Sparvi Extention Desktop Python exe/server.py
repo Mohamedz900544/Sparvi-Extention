@@ -186,7 +186,9 @@ async def handle_join(state, message):
         "features": {
             "desktopOverlay": True,
             "toolEvent": True,
+            "instantReward": True,
             "trophyReward": True,
+            "heartReward": True,
             "instructorAuth": bool(INSTRUCTOR_AUTH_URL)
         }
     })
@@ -259,7 +261,7 @@ async def handle_tool_event(state, message):
         })
         return
 
-    if not state.pointer_enabled and event.get("kind") != "trophy_reward":
+    if not state.pointer_enabled and event.get("kind") not in {"trophy_reward", "heart_reward"}:
         return
 
     state.current_context = normalize_context(event.get("currentContext"), fallback=state.current_context)
@@ -531,6 +533,7 @@ def normalize_tool_event(value):
         "freeze_marker",
         "guided_hotspot",
         "trophy_reward",
+        "heart_reward",
         "text_cast",
         "clear_tools"
     }:
@@ -551,14 +554,15 @@ def normalize_tool_event(value):
         event["xRatio"] = x_ratio
         event["yRatio"] = y_ratio
 
-    if kind == "trophy_reward":
+    if kind in {"trophy_reward", "heart_reward"}:
         x_ratio = normalize_ratio(value.get("xRatio"))
         y_ratio = normalize_ratio(value.get("yRatio"))
         if x_ratio is not None and y_ratio is not None:
             event["xRatio"] = x_ratio
             event["yRatio"] = y_ratio
         message = str(value.get("message") or "").strip()
-        event["message"] = message[:80] if message else "Great answer!"
+        default_message = "Great answer!" if kind == "trophy_reward" else "Nice work!"
+        event["message"] = message[:80] if message else default_message
 
     if kind in {"draw_arrow", "draw_circle", "draw_underline"}:
         x1_ratio = normalize_ratio(value.get("x1Ratio"))
